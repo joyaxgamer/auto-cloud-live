@@ -1,9 +1,8 @@
-```yaml
 name: Auto Cloud 24/7 Live
 on:
+  workflow_dispatch:
   schedule:
     - cron: '0 */5 * * *'
-  workflow_dispatch:
 
 concurrency:
   group: auto-cloud-live-group
