@@ -7,13 +7,10 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 
-# ========================================================
-# आसान सेटिंग्स (जब चाहें यहाँ से समय या टेक्स्ट बदलें)
-# ========================================================
-IMAGE_CHANGE_SECONDS = 600   # हर 10 मिनट (600 सेकंड) में बैकग्राउंड फोटो बदलेगी
+IMAGE_CHANGE_SECONDS = 600
 CHANNEL_DISPLAY = "@Talkto-urs"
 TICKER_TEXT = "SUBSCRIBE @Talkto-urs  •  Like & Share for 24/7 Relaxing Music  •  Stay Connected"
-COOLDOWN_SECONDS = 3600      # 1 घंटे बाद दोबारा चैट वेलकम दिखाने के लिए
+COOLDOWN_SECONDS = 3600
 
 STREAM_HOST = "a.rtmp." + "youtube.com"
 STREAM_URL = "rtmp://" + STREAM_HOST + "/live2"
@@ -30,7 +27,6 @@ def log(msg):
 def get_ist_hour():
     return datetime.now(timezone(timedelta(hours=5, minutes=30))).hour
 
-# हर समय स्लॉट के अनुसार सटीक म्यूजिक, फोटो कीवर्ड, टैगलाइन और YouTube SEO
 def get_slot_config():
     h = get_ist_hour()
     if 5 <= h < 12:
@@ -182,13 +178,11 @@ def fetch_online_songs(query, slot_name="morning", folder="songs"):
                 fn = fi.get("name", "")
                 if fn.lower().endswith(".mp3") and int(fi.get("size", 0)) < 15000000:
                     urllib.request.urlretrieve(f"https://{arch_host}/download/{ident}/{urllib.parse.quote(fn)}", os.path.join(folder, f"track_{count}.mp3"))
-                    log(f"Downloaded [{slot_name}] track: {fn}")
                     count += 1
                     break
     except Exception as e:
         log(f"Song fetch note: {e}")
 
-    # यदि ऑनलाइन धुनें कम मिलें तो समय स्लॉट के अनुसार अलग-अलग शांत ध्वनि तैयार करना
     if len(os.listdir(folder)) == 0:
         fallback_tones = {
             "morning": "sine=f=432:r=44100:d=300,volume=0.05",
@@ -209,7 +203,6 @@ def fetch_multiple_images(img_query, folder="pics", count=12):
         except: pass
 
     downloaded = 0
-    # 1. पहले Bing की पब्लिक हाई-रेज़ोल्यूशन नेचर वॉलपेपर API से असली HD तस्वीरें लाना (यह कभी ब्लॉक नहीं होती)
     try:
         b_host = "www." + "bing.com"
         bing_api = f"https://{b_host}/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=en-US"
@@ -231,14 +224,13 @@ def fetch_multiple_images(img_query, folder="pics", count=12):
     except Exception as e:
         log(f"Bing photo note: {e}")
 
-    # 2. इसके साथ ही Picsum के क्यूरेटेड नेचर IDs से अतिरिक्त HD तस्वीरें जोड़ना ताकि 12 तस्वीरें पूरी हों
     nature_seeds = {
-        "morning":,
-        "afternoon":,
-        "evening":,
-        "night": [104, 110, 116, 120, 124, 128, 134, 142, 152, 164, 175, 180]
+        "morning": list([10, 11, 13, 14, 15, 16, 17, 28]),
+        "afternoon": list([18, 19, 25, 29, 37, 42, 43, 48]),
+        "evening": list([49, 54, 55, 56, 57, 65, 70, 74]),
+        "night": list([76, 82, 84, 88, 90, 96, 103, 110])
     }
-    seeds = nature_seeds.get(active_slot, [10, 15, 28, 33, 49, 62, 84, 104])
+    seeds = nature_seeds.get(active_slot, list([10, 11, 13, 14, 15, 16]))
     random.shuffle(seeds)
 
     pic_host = "picsum." + "photos"
