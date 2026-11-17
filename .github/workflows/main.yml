@@ -1,0 +1,38 @@
+name: Auto Cloud 24/7 Live
+on:
+  schedule:
+    - cron: '0 */5 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: auto-cloud-live-group
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+
+jobs:
+  stream:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Install FFmpeg and Python Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          pip install -U yt-dlp pytchat
+
+      - name: Start Auto Cloud Live
+        run: timeout 19800 python stream.py || true
+
+      - name: Auto-Restart Next 24/7 Session
+        if: success()
+        run: |
+          API_HOST="://github.com"
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://${API_HOST}/repos/${{ github.repository }}/actions/workflows/main.yml/dispatches" \
+            -d '{"ref":"main"}'
