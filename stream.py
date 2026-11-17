@@ -10,7 +10,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 # ========================================================
 # आसान सेटिंग्स (जब चाहें यहाँ से समय या टेक्स्ट बदलें)
 # ========================================================
-IMAGE_CHANGE_SECONDS = 600   # फोटो बदलने का समय सेकंड में (300 = 5 मिनट, 600 = 10 मिनट, 900 = 15 मिनट)
+IMAGE_CHANGE_SECONDS = 600   # हर 10 मिनट (600 सेकंड) में बैकग्राउंड फोटो बदलेगी
 CHANNEL_DISPLAY = "@Talkto-urs"
 TICKER_TEXT = "SUBSCRIBE @Talkto-urs  •  Like & Share for 24/7 Relaxing Music  •  Stay Connected"
 COOLDOWN_SECONDS = 3600      # 1 घंटे बाद दोबारा चैट वेलकम दिखाने के लिए
@@ -30,24 +30,45 @@ def log(msg):
 def get_ist_hour():
     return datetime.now(timezone(timedelta(hours=5, minutes=30))).hour
 
+# हर समय स्लॉट के अनुसार सटीक म्यूजिक, फोटो कीवर्ड, टैगलाइन और YouTube SEO
 def get_slot_config():
     h = get_ist_hour()
     if 5 <= h < 12:
-        return ("morning", "morning acoustic flute relaxing instrumental",
-                "Morning Peaceful Flute & Nature Music | 24/7 Positive Energy Live",
-                "Start your morning with peaceful flute melodies.\n#MorningMusic #RelaxingLive")
+        return (
+            "morning",
+            "morning acoustic flute uplifting peaceful instrumental",
+            "sunrise morning nature mountains lake",
+            "PEACEFUL MORNING • BOOST ENERGY • FRESH START",
+            "Morning Peaceful Flute & Nature Music | 24/7 Positive Energy Live",
+            "Start your morning with peaceful flute melodies and positive vibes.\n#MorningMusic #BoostEnergy #RelaxingLive"
+        )
     elif 12 <= h < 17:
-        return ("afternoon", "calm study focus ambient piano instrumental",
-                "Deep Focus & Study Instrumental Music | Calm Ambient Piano 24/7 Live",
-                "Best calm ambient piano for deep focus and work.\n#StudyMusic #FocusLive")
+        return (
+            "afternoon",
+            "calm study focus ambient piano instrumental",
+            "peaceful forest green nature calm lake",
+            "DEEP FOCUS • STUDY & WORK • CALM MIND",
+            "Deep Focus & Study Instrumental Music | Calm Ambient Piano 24/7 Live",
+            "Best calm ambient piano for deep focus, reading, and work.\n#StudyMusic #FocusLive #AmbientPiano"
+        )
     elif 17 <= h < 21:
-        return ("evening", "sunset lofi chill beats relaxing",
-                "Evening Sunset Lofi & Chill Vibes | Relaxing Beats 24/7 Live",
-                "Unwind your evening with smooth sunset lofi chill beats.\n#EveningChill #LofiLive")
+        return (
+            "evening",
+            "sunset lofi chill beats relaxing guitar",
+            "golden sunset sky clouds evening landscape",
+            "EVENING CHILL • SUNSET LOFI • RELAXING VIBES",
+            "Evening Sunset Lofi & Chill Vibes | Relaxing Beats 24/7 Live",
+            "Unwind your evening with smooth sunset lofi chill beats and guitar.\n#EveningChill #LofiLive #SunsetVibes"
+        )
     else:
-        return ("night", "deep sleep rain ambient music relaxing",
-                "Deep Sleep & Peaceful Night Rain Music | Stress Relief 24/7 Live",
-                "Fall asleep fast with soothing night rain melodies.\n#SleepMusic #NightRain")
+        return (
+            "night",
+            "deep sleep night rain ambient meditation music",
+            "starry night sky moon dark calm nature",
+            "DEEP SLEEP • PEACEFUL NIGHT • STRESS RELIEF",
+            "Deep Sleep & Peaceful Night Rain Music | Stress Relief 24/7 Live",
+            "Fall asleep fast with soothing night rain and deep sleep ambient melodies.\n#SleepMusic #NightRain #DeepSleepLive"
+        )
 
 def get_youtube_service():
     token_str = os.environ.get("YT_TOKEN_JSON", "").strip()
@@ -62,23 +83,20 @@ def get_youtube_service():
         log(f"YouTube API Token Error: {e}")
         return None
 
-def create_stylish_thumbnail(base_img="bg.jpg", out_thumb="stylish_thumb.jpg", slot_name="LIVE"):
+def create_stylish_thumbnail(base_img="bg.jpg", out_thumb="stylish_thumb.jpg", slot_name="LIVE", tagline="24/7 LIVE STREAM"):
     try:
         img = Image.open(base_img).convert("RGB").resize((1280, 720))
-        # बैकग्राउंड को थोड़ा डार्क और सिनेमैटिक बनाना ताकि टेक्स्ट चमक कर दिखे
         img = ImageEnhance.Brightness(img).enhance(0.55)
         img = ImageEnhance.Contrast(img).enhance(1.2)
         draw = ImageDraw.Draw(img)
 
-        # चारों तरफ सुनहरा बॉर्डर
-        draw.rectangle([15, 15, 1265, 705], outline="#FFD700", width=8)
+        draw.rectangle([(15, 15), (1265, 705)], outline="#FFD700", width=8)
 
         font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
         f_big = ImageFont.truetype(font_path, 76)
         f_med = ImageFont.truetype(font_path, 42)
-        f_small = ImageFont.truetype(font_path, 32)
+        f_small = ImageFont.truetype(font_path, 30)
 
-        # समय के हिसाब से आकर्षक मुख्य हेडिंग
         headings = {
             "morning": ("MORNING PEACEFUL", "FLUTE & NATURE VIBES"),
             "afternoon": ("DEEP FOCUS & STUDY", "CALM AMBIENT PIANO"),
@@ -87,23 +105,18 @@ def create_stylish_thumbnail(base_img="bg.jpg", out_thumb="stylish_thumb.jpg", s
         }
         line1, line2 = headings.get(slot_name, ("24/7 RELAXING", "INSTRUMENTAL MUSIC"))
 
-        # ऊपर लाल रंग का LIVE बैज
-        draw.rectangle([50, 50, 290, 115], fill="#E50914")
+        draw.rectangle([(60, 50), (310, 110)], fill="#E50914")
         draw.text((75, 63), "● 24/7 LIVE", fill="white", font=f_small)
-
-        # ऊपर दाईं तरफ चैनल का नाम
         draw.text((920, 63), CHANNEL_DISPLAY, fill="#FFD700", font=f_med)
 
-        # बीच में बड़ा स्टाइलिश टाइटल (शैडो के साथ)
         draw.text((74, 264), line1, fill="black", font=f_big)
         draw.text((70, 260), line1, fill="#FFD700", font=f_big)
 
         draw.text((74, 364), line2, fill="black", font=f_big)
         draw.text((70, 360), line2, fill="white", font=f_big)
 
-        # नीचे की पट्टी
-        draw.rectangle([50, 560, 780, 625], fill=(0, 0, 0))
-        draw.text((70, 573), "NO COPYRIGHT • RELAX • SLEEP • FOCUS", fill="#00E676", font=f_small)
+        draw.rectangle([(60, 560), (1080, 620)], fill=(0, 0, 0))
+        draw.text((75, 575), tagline, fill="#00E676", font=f_small)
 
         img.save(out_thumb, "JPEG", quality=95)
         return out_thumb
@@ -111,13 +124,13 @@ def create_stylish_thumbnail(base_img="bg.jpg", out_thumb="stylish_thumb.jpg", s
         log(f"Thumbnail design note: {e}")
         return base_img
 
-def update_only_this_live_seo(title, description, thumb_path="bg.jpg"):
+def update_only_this_live_seo(title, description, thumb_path="bg.jpg", tagline="24/7 LIVE STREAM"):
     global target_broadcast_id
     yt = get_youtube_service()
     if not yt:
         return
 
-    designed_thumb = create_stylish_thumbnail(thumb_path, "stylish_thumb.jpg", active_slot)
+    designed_thumb = create_stylish_thumbnail(thumb_path, "stylish_thumb.jpg", active_slot, tagline)
 
     for attempt in range(6):
         time.sleep(15)
@@ -149,7 +162,7 @@ def update_only_this_live_seo(title, description, thumb_path="bg.jpg"):
                     return
         except Exception as e:
             log(f"SEO Update Error: {e}")
-def fetch_online_songs(query, folder="songs"):
+def fetch_online_songs(query, slot_name="morning", folder="songs"):
     os.makedirs(folder, exist_ok=True)
     for f in os.listdir(folder):
         try: os.remove(os.path.join(folder, f))
@@ -169,30 +182,65 @@ def fetch_online_songs(query, folder="songs"):
                 fn = fi.get("name", "")
                 if fn.lower().endswith(".mp3") and int(fi.get("size", 0)) < 15000000:
                     urllib.request.urlretrieve(f"https://{arch_host}/download/{ident}/{urllib.parse.quote(fn)}", os.path.join(folder, f"track_{count}.mp3"))
+                    log(f"Downloaded [{slot_name}] track: {fn}")
                     count += 1
                     break
     except Exception as e:
         log(f"Song fetch note: {e}")
 
+    # यदि ऑनलाइन धुनें कम मिलें तो समय स्लॉट के अनुसार अलग-अलग शांत ध्वनि तैयार करना
     if len(os.listdir(folder)) == 0:
+        fallback_tones = {
+            "morning": "sine=f=432:r=44100:d=300,volume=0.05",
+            "afternoon": "anoisesrc=c=brown:r=44100:a=0.03",
+            "evening": "anoisesrc=c=pink:r=44100:a=0.03,aecho=0.8:0.88:60:0.4",
+            "night": "anoisesrc=c=pink:r=44100:a=0.05,lowpass=f=400"
+        }
+        af = fallback_tones.get(slot_name, "anoisesrc=c=pink:r=44100:a=0.04")
         subprocess.run([
-            "ffmpeg", "-y", "-f", "lavfi",
-            "-i", "anoisesrc=c=pink:r=44100:a=0.04,aecho=0.8:0.88:60:0.4",
-            "-t", "300", "-b:a", "128k", os.path.join(folder, "ambient_rain.mp3")
+            "ffmpeg", "-y", "-f", "lavfi", "-i", af,
+            "-t", "300", "-b:a", "128k", os.path.join(folder, f"{slot_name}_ambient.mp3")
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-def fetch_multiple_images(folder="pics", count=12):
+def fetch_multiple_images(img_query, folder="pics", count=12):
     os.makedirs(folder, exist_ok=True)
-    pic_host = "picsum" + ".photos"
-    for i in range(count):
-        out_img = os.path.join(folder, f"pic_{i}.jpg")
-        try:
-            seed = random.randint(1, 99999)
-            urllib.request.urlretrieve(f"https://{pic_host}/seed/{seed}/1280/720", out_img)
-        except Exception:
-            pass
-        if not os.path.exists(out_img) or os.path.getsize(out_img) < 5000:
-            subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=0x16213e:s=1280x720:d=1", "-frames:v", "1", out_img], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    for f in os.listdir(folder):
+        try: os.remove(os.path.join(folder, f))
+        except: pass
+
+    wiki_host = "commons." + "wikimedia.org"
+    q = urllib.parse.quote(img_query)
+    api_url = f"https://{wiki_host}/w/api.php?action=query&generator=search&gsrsearch=filetype:bitmap+{q}&gsrnamespace=6&gsrlimit=25&prop=imageinfo&iiprop=url|size&iiurlwidth=1280&format=json"
+    
+    downloaded = 0
+    try:
+        req = urllib.request.Request(api_url, headers={"User-Agent": "LiveStreamBot/1.0"})
+        data = json.loads(urllib.request.urlopen(req, timeout=15).read().decode())
+        pages = list(data.get("query", {}).get("pages", {}).values())
+        random.shuffle(pages)
+
+        for p in pages:
+            if downloaded >= count:
+                break
+            ii = p.get("imageinfo", [{}])
+            thumb_url = ii.get("thumburl") or ii.get("url")
+            w = ii.get("width", 0)
+            h = ii.get("height", 0)
+            if thumb_url and w > h and w >= 1000:
+                out_img = os.path.join(folder, f"pic_{downloaded}.jpg")
+                req_img = urllib.request.Request(thumb_url, headers={"User-Agent": "LiveStreamBot/1.0"})
+                with urllib.request.urlopen(req_img, timeout=15) as r, open(out_img, "wb") as out_f:
+                    out_f.write(r.read())
+                if os.path.exists(out_img) and os.path.getsize(out_img) > 15000:
+                    log(f"Matched Topic Image Downloaded: {downloaded+1}")
+                    downloaded += 1
+    except Exception as e:
+        log(f"Topic image search note: {e}")
+
+    if downloaded == 0:
+        out_img = os.path.join(folder, "pic_0.jpg")
+        subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=0x16213e:s=1280x720:d=1", "-frames:v", "1", out_img], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
     if os.path.exists(os.path.join(folder, "pic_0.jpg")):
         subprocess.run(["cp", os.path.join(folder, "pic_0.jpg"), "bg.jpg"])
         subprocess.run(["cp", os.path.join(folder, "pic_0.jpg"), "live_bg.jpg"])
@@ -204,7 +252,6 @@ def build_song_playlist():
             random.shuffle(s_files)
             for p in s_files: f.write(f"file '{p}'\n")
 
-# हर IMAGE_CHANGE_SECONDS में बिना स्ट्रीम रोके बैकग्राउंड फोटो बदलने वाला थ्रेड
 def image_rotator_loop():
     idx = 1
     while True:
@@ -250,7 +297,7 @@ def time_watcher():
     global current_proc, active_slot
     while True:
         time.sleep(60)
-        new_slot, _, _, _ = get_slot_config()
+        new_slot, _, _, _, _, _ = get_slot_config()
         if active_slot and new_slot != active_slot:
             log(f"Slot changed ({active_slot} -> {new_slot})! Updating all media & SEO...")
             active_slot = new_slot
@@ -273,14 +320,14 @@ def start_auto_cloud_live():
     filter_complex = f1 + f2 + f3 + f4 + f5
 
     while True:
-        slot, song_q, yt_title, yt_desc = get_slot_config()
+        slot, song_q, img_q, tagline, yt_title, yt_desc = get_slot_config()
         active_slot = slot
         log(f"Starting smooth slot: {slot.upper()}")
-        fetch_online_songs(song_q)
-        fetch_multiple_images("pics", 12)
+        fetch_online_songs(song_q, slot)
+        fetch_multiple_images(img_q, "pics", 12)
         build_song_playlist()
 
-        threading.Thread(target=update_only_this_live_seo, args=(yt_title, yt_desc, "bg.jpg"), daemon=True).start()
+        threading.Thread(target=update_only_this_live_seo, args=(yt_title, yt_desc, "bg.jpg", tagline), daemon=True).start()
 
         cmd = [
             "ffmpeg", "-re",
