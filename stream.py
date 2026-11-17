@@ -5,6 +5,7 @@ from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 
 # ========================================================
 # आसान सेटिंग्स (जब चाहें यहाँ से समय या टेक्स्ट बदलें)
@@ -61,11 +62,62 @@ def get_youtube_service():
         log(f"YouTube API Token Error: {e}")
         return None
 
+def create_stylish_thumbnail(base_img="bg.jpg", out_thumb="stylish_thumb.jpg", slot_name="LIVE"):
+    try:
+        img = Image.open(base_img).convert("RGB").resize((1280, 720))
+        # बैकग्राउंड को थोड़ा डार्क और सिनेमैटिक बनाना ताकि टेक्स्ट चमक कर दिखे
+        img = ImageEnhance.Brightness(img).enhance(0.55)
+        img = ImageEnhance.Contrast(img).enhance(1.2)
+        draw = ImageDraw.Draw(img)
+
+        # चारों तरफ सुनहरा बॉर्डर
+        draw.rectangle([15, 15, 1265, 705], outline="#FFD700", width=8)
+
+        font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        f_big = ImageFont.truetype(font_path, 76)
+        f_med = ImageFont.truetype(font_path, 42)
+        f_small = ImageFont.truetype(font_path, 32)
+
+        # समय के हिसाब से आकर्षक मुख्य हेडिंग
+        headings = {
+            "morning": ("MORNING PEACEFUL", "FLUTE & NATURE VIBES"),
+            "afternoon": ("DEEP FOCUS & STUDY", "CALM AMBIENT PIANO"),
+            "evening": ("EVENING SUNSET", "LOFI & CHILL BEATS"),
+            "night": ("DEEP SLEEP MUSIC", "PEACEFUL NIGHT RAIN")
+        }
+        line1, line2 = headings.get(slot_name, ("24/7 RELAXING", "INSTRUMENTAL MUSIC"))
+
+        # ऊपर लाल रंग का LIVE बैज
+        draw.rectangle([50, 50, 290, 115], fill="#E50914")
+        draw.text((75, 63), "● 24/7 LIVE", fill="white", font=f_small)
+
+        # ऊपर दाईं तरफ चैनल का नाम
+        draw.text((920, 63), CHANNEL_DISPLAY, fill="#FFD700", font=f_med)
+
+        # बीच में बड़ा स्टाइलिश टाइटल (शैडो के साथ)
+        draw.text((74, 264), line1, fill="black", font=f_big)
+        draw.text((70, 260), line1, fill="#FFD700", font=f_big)
+
+        draw.text((74, 364), line2, fill="black", font=f_big)
+        draw.text((70, 360), line2, fill="white", font=f_big)
+
+        # नीचे की पट्टी
+        draw.rectangle([50, 560, 780, 625], fill=(0, 0, 0))
+        draw.text((70, 573), "NO COPYRIGHT • RELAX • SLEEP • FOCUS", fill="#00E676", font=f_small)
+
+        img.save(out_thumb, "JPEG", quality=95)
+        return out_thumb
+    except Exception as e:
+        log(f"Thumbnail design note: {e}")
+        return base_img
+
 def update_only_this_live_seo(title, description, thumb_path="bg.jpg"):
     global target_broadcast_id
     yt = get_youtube_service()
     if not yt:
         return
+
+    designed_thumb = create_stylish_thumbnail(thumb_path, "stylish_thumb.jpg", active_slot)
 
     for attempt in range(6):
         time.sleep(15)
@@ -88,12 +140,12 @@ def update_only_this_live_seo(title, description, thumb_path="bg.jpg"):
                     snippet["description"] = description
                     yt.liveBroadcasts().update(part="snippet", body={"id": target_broadcast_id, "snippet": snippet}).execute()
                     
-                    if os.path.exists(thumb_path):
+                    if os.path.exists(designed_thumb):
                         yt.thumbnails().set(
                             videoId=target_broadcast_id,
-                            media_body=MediaFileUpload(thumb_path, mimetype="image/jpeg")
+                            media_body=MediaFileUpload(designed_thumb, mimetype="image/jpeg")
                         ).execute()
-                    log(f"SUCCESS: Title, Description & Thumbnail Updated -> {title}")
+                    log(f"SUCCESS: Stylish Thumbnail, Title & Description Updated -> {title}")
                     return
         except Exception as e:
             log(f"SEO Update Error: {e}")
