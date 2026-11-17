@@ -87,7 +87,7 @@ def update_only_this_live_seo(title, description, thumb_path="bg.jpg"):
                             videoId=target_broadcast_id,
                             media_body=MediaFileUpload(thumb_path, mimetype="image/jpeg")
                         ).execute()
-                    log(f"SUCCESS: Title, Description & Thumbnail Updated Together -> {title}")
+                    log(f"SUCCESS: Title, Description & Thumbnail Updated -> {title}")
                     return
         except Exception as e:
             log(f"SEO Update Error: {e}")
@@ -123,7 +123,6 @@ def fetch_online_songs(query, folder="songs"):
             "-i", "anoisesrc=c=pink:r=44100:a=0.04,aecho=0.8:0.88:60:0.4",
             "-t", "300", "-b:a", "128k", os.path.join(folder, "ambient_rain.mp3")
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
 def fetch_multiple_images(folder="pics", count=12):
     os.makedirs(folder, exist_ok=True)
     pic_host = "picsum" + ".photos"
@@ -146,7 +145,6 @@ def build_media_lists():
             random.shuffle(s_files)
             for p in s_files: f.write(f"file '{p}'\n")
 
-    # हर तस्वीर 300 सेकंड (5 मिनट) तक चलेगी
     p_files = [os.path.abspath(os.path.join("pics", f)) for f in os.listdir("pics") if f.endswith(".jpg")]
     with open("images_list.txt", "w", encoding="utf-8") as f:
         for _ in range(30):
@@ -202,52 +200,40 @@ def start_auto_cloud_live():
     threading.Thread(target=chat_listener, daemon=True).start()
     threading.Thread(target=time_watcher, daemon=True).start()
 
-    # विज़ुअल इफेक्ट्स:
-    # 1. हर 5 मिनट (300s) पर स्मूथ फेड ट्रांज़िशन (2 सेकंड का Fade-In और Fade-Out) + ज़ूम एनिमेशन
-    # 2. ऊपर बाईं तरफ चैनल का नाम (@Talkto-urs • 24/7 LIVE)
-    # 3. नीचे ऑडियो वेव्स (Equalizer Waves)
-    # 4. नीचे लगातार चलता हुआ सामान्य विजुअल Subscribe टिकर
-    # 5. नए चैट यूजर का वेलकम एनिमेशन
-    filter_complex = (
-        "[0:v]scale=1280:720,format=yuv420p,"
-        "fade=t=in:st=0:d=2,fade=t=out:st=298:d=2,"
-        "zoompan=z='min(zoom+0.00025,1.10)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1280x720[bg];"
-        "[1:a]showwaves=s=1280x55:mode=cline:rate=25:colors=white@0.4[waves];"
-        "[bg][waves]overlay=0:H-55[with_waves];"
-        "[with_waves]drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:"
-        f"text='{CHANNEL_DISPLAY}  •  24/7 LIVE':fontcolor=white@0.9:fontsize=24:"
-        "box=1:boxcolor=black@0.5:boxborderw=10:x=25:y=25,"
-        "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:"
-f"text='SUBSCRIBE {CHANNEL_DISPLAY}  •  Like & Share for 24/7 Relaxing Music  •  Stay Connected':fontcolor=white@0.85:fontsize=24:"
-"box=1:boxcolor=black@0.45:boxborderw=8:x=w-mod(t95\,w+tw):y=h-92,"
-"drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:"
-"textfile=welcome.txt:reload=1:fontcolor=yellow:fontsize=34:"
-"box=1:boxcolor=black@0.75:boxborderw=12:x=w-mod(t180\,w+tw):y=h-145[vout]"
-)
-while True:
-slot, song_q, yt_title, yt_desc = get_slot_config()
-active_slot = slot
-log(f"Starting upgraded slot: {slot.upper()}")
-fetch_online_songs(song_q)
-fetch_multiple_images("pics", 12)
-build_media_lists()
-threading.Thread(target=update_only_this_live_seo, args=(yt_title, yt_desc, "bg.jpg"), daemon=True).start()
-cmd = [
-"ffmpeg", "-re",
-"-f", "concat", "-safe", "0", "-stream_loop", "-1", "-i", "images_list.txt",
-"-f", "concat", "-safe", "0", "-stream_loop", "-1", "-i", "playlist.txt",
-"-filter_complex", filter_complex,
-"-map", "[vout]", "-map", "1:a:0",
-"-c:v", "libx264", "-preset", "ultrafast", "-b:v", "1800k",
-"-maxrate", "1800k", "-bufsize", "3600k", "-pix_fmt", "yuv420p",
-"-g", "50", "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
-"-f", "flv", rtmp_url
-]
-try:
-current_proc = subprocess.Popen(cmd)
-current_proc.wait()
-except Exception as e:
-log(f"Stream reset: {e}")
-time.sleep(3)
-if name == "main":
-start_auto_cloud_live()
+    f1 = "[0:v]scale=1280:720,format=yuv420p,fade=t=in:st=0:d=2,fade=t=out:st=298:d=2,zoompan=z='min(zoom+0.00025,1.10)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1280x720[bg];"
+    f2 = "[1:a]showwaves=s=1280x55:mode=cline:rate=25:colors=white@0.4[waves];[bg][waves]overlay=0:H-55[with_waves];"
+    f3 = f"[with_waves]drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='{CHANNEL_DISPLAY}  •  24/7 LIVE':fontcolor=white@0.9:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=10:x=25:y=25,"
+    f4 = f"drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='SUBSCRIBE {CHANNEL_DISPLAY}  •  Like & Share for 24/7 Relaxing Music  •  Stay Connected':fontcolor=white@0.85:fontsize=24:box=1:boxcolor=black@0.45:boxborderw=8:x=w-mod(t*95\\,w+tw):y=h-92,"
+    f5 = "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:textfile=welcome.txt:reload=1:fontcolor=yellow:fontsize=34:box=1:boxcolor=black@0.75:boxborderw=12:x=w-mod(t*180\\,w+tw):y=h-145[vout]"
+    filter_complex = f1 + f2 + f3 + f4 + f5
+
+    while True:
+        slot, song_q, yt_title, yt_desc = get_slot_config()
+        active_slot = slot
+        log(f"Starting upgraded slot: {slot.upper()}")
+        fetch_online_songs(song_q)
+        fetch_multiple_images("pics", 12)
+        build_media_lists()
+
+        threading.Thread(target=update_only_this_live_seo, args=(yt_title, yt_desc, "bg.jpg"), daemon=True).start()
+
+        cmd = [
+            "ffmpeg", "-re",
+            "-f", "concat", "-safe", "0", "-stream_loop", "-1", "-i", "images_list.txt",
+            "-f", "concat", "-safe", "0", "-stream_loop", "-1", "-i", "playlist.txt",
+            "-filter_complex", filter_complex,
+            "-map", "[vout]", "-map", "1:a:0",
+            "-c:v", "libx264", "-preset", "ultrafast", "-b:v", "1800k",
+            "-maxrate", "1800k", "-bufsize", "3600k", "-pix_fmt", "yuv420p",
+            "-g", "50", "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+            "-f", "flv", rtmp_url
+        ]
+        try:
+            current_proc = subprocess.Popen(cmd)
+            current_proc.wait()
+        except Exception as e:
+            log(f"Stream reset: {e}")
+        time.sleep(3)
+
+if __name__ == "__main__":
+    start_auto_cloud_live()
