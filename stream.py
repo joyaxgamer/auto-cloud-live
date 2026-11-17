@@ -42,12 +42,15 @@ def get_slot_config():
                 "Fall asleep fast with soothing night rain melodies.\n#SleepMusic #NightRain")
 
 def get_youtube_service():
-    token_str = os.environ.get("YT_TOKEN_JSON", "").strip()
+    token_str = os.environ.get("YT_TOKEN_JSON", "").strip().replace("\n", "").replace(" ", "")
     if not token_str:
-        log("ERROR: YT_TOKEN_JSON secret empty! Check GitHub Secrets.")
+        log("ERROR: YT_TOKEN_JSON secret empty!")
         return None
     try:
-        creds = Credentials.from_authorized_user_info(json.loads(token_str, strict=False))
+        if not token_str.startswith("{"):
+            import base64
+            token_str = base64.b64decode(token_str).decode()
+        creds = Credentials.from_authorized_user_info(json.loads(token_str))
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
         return build("youtube", "v3", credentials=creds)
