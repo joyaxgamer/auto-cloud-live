@@ -7,7 +7,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 STREAM_HOST = "://youtube.com"
-STREAM_URL = "rtmp://a.rtmp.youtube.com/live2"
+STREAM_URL = "rtmp://" + STREAM_HOST + "/live2"
 STREAM_KEY = "weq2-6vuu-c3dh-x0td-emvf"
 COOLDOWN_SECONDS = 3600
 
@@ -15,6 +15,9 @@ last_welcomed = {}
 current_proc = None
 active_slot = None
 target_broadcast_id = None
+
+def log(msg):
+    print(msg, flush=True)
 
 def get_ist_hour():
     return datetime.now(timezone(timedelta(hours=5, minutes=30))).hour
@@ -41,7 +44,7 @@ def get_slot_config():
 def get_youtube_service():
     token_str = os.environ.get("YT_TOKEN_JSON", "").strip()
     if not token_str:
-        print("ERROR: YT_TOKEN_JSON secret empty!")
+        log("ERROR: YT_TOKEN_JSON secret empty! Check GitHub Secrets.")
         return None
     try:
         creds = Credentials.from_authorized_user_info(json.loads(token_str))
@@ -49,7 +52,7 @@ def get_youtube_service():
             creds.refresh(Request())
         return build("youtube", "v3", credentials=creds)
     except Exception as e:
-        print("YouTube API Error:", e)
+        log(f"YouTube API Token Error: {e}")
         return None
 
 def update_only_this_live_seo(title, description, thumb_path="bg.jpg"):
@@ -58,36 +61,42 @@ def update_only_this_live_seo(title, description, thumb_path="bg.jpg"):
     if not yt:
         return
 
-    for attempt in range(5):
+    for attempt in range(6):
         time.sleep(15)
         try:
+            # 1. अपनी Stream Key से जुड़ी Stream ID निकालना
             streams_res = yt.liveStreams().list(part="id,cdn", mine=True).execute()
             my_stream_id = None
             for item in streams_res.get("items", []):
-                if item.get("cdn", {}).get("ingestionInfo", {}).get("streamName") == STREAM_KEY:
+                s_name = item.get("cdn", {}).get("ingestionInfo", {}).get("streamName")
+                if s_name == STREAM_KEY:
                     my_stream_id = item["id"]
                     break
 
-            b_res = yt.liveBroadcasts().list(part="id,snippet,contentDetails", broadcastStatus="active").execute()
+            log(f"Attempt {attempt+1}: Found Stream ID = {my_stream_id}")
+
+            # 2. mine=True से सभी लाइव ब्रॉडकास्ट चेक करना (active और testing दोनों)
+            b_res = yt.liveBroadcasts().list(part="id,snippet,contentDetails,status", mine=True, maxResults=10).execute()
             for b in b_res.get("items", []):
-                if my_stream_id and b.get("contentDetails", {}).get("boundStreamId") == my_stream_id:
+                bound_id = b.get("contentDetails", {}).get("boundStreamId")
+                life_cycle = b.get("status", {}).get("lifeCycleStatus")
+                if my_stream_id and bound_id == my_stream_id and life_cycle in ["live", "testing", "ready"]:
                     target_broadcast_id = b["id"]
                     snippet = b["snippet"]
                     snippet["title"] = title
                     snippet["description"] = description
                     yt.liveBroadcasts().update(part="snippet", body={"id": target_broadcast_id, "snippet": snippet}).execute()
-                    print("SUCCESS: Title & Description Updated ->", title)
+                    log(f"SUCCESS: Title & Description Updated -> {title}")
 
                     if os.path.exists(thumb_path):
                         yt.thumbnails().set(
                             videoId=target_broadcast_id,
                             media_body=MediaFileUpload(thumb_path, mimetype="image/jpeg")
                         ).execute()
-                        print("SUCCESS: Thumbnail Updated!")
+                        log("SUCCESS: Thumbnail Updated!")
                     return
-            print(f"Attempt {attempt+1}: Waiting for live stream to become active...")
         except Exception as e:
-            print("SEO Update Error:", e)
+            log(f"SEO Update Error: {e}")
 
 def fetch_online_songs(query, folder="songs"):
     os.makedirs(folder, exist_ok=True)
@@ -165,6 +174,7 @@ def time_watcher():
         time.sleep(60)
         new_slot, _, _, _ = get_slot_config()
         if active_slot and new_slot != active_slot:
+            log(f"Slot changed ({active_slot} -> {new_slot})! Updating stream...")
             if current_proc: current_proc.terminate()
 
 def start_auto_cloud_live():
@@ -179,6 +189,7 @@ def start_auto_cloud_live():
     while True:
         slot, song_q, yt_title, yt_desc = get_slot_config()
         active_slot = slot
+        log(f"Starting slot: {slot.upper()}")
         fetch_online_songs(song_q)
         fetch_online_image("bg.jpg")
         build_playlist()
@@ -189,8 +200,8 @@ def start_auto_cloud_live():
         try:
             current_proc = subprocess.Popen(cmd)
             current_proc.wait()
-        except Exception:
-            pass
+        except Exception as e:
+            log(f"Stream reset: {e}")
         time.sleep(3)
 
 if __name__ == "__main__":
