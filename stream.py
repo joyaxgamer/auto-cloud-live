@@ -202,44 +202,78 @@ def fetch_online_songs(query, slot_name="morning", folder="songs"):
             "-t", "300", "-b:a", "128k", os.path.join(folder, f"{slot_name}_ambient.mp3")
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+def create_themed_gradient(out_path, slot_name="evening"):
+    # अगर इंटरनेट से फोटो न मिले तो समय के हिसाब से खूबसूरत ग्रेडिएंट बैकग्राउंड बनाना (हरा रंग कभी नहीं आएगा)
+    colors = {
+        "morning": ((255, 140, 66), (255, 218, 121)),   # सुनहरा सुबह का रंग
+        "afternoon": ((34, 112, 147), (52, 172, 224)),  # शांत नीला दिन का रंग
+        "evening": ((179, 55, 113), (253, 114, 114)),   # शाम का सूर्यास्त रंग
+        "night": ((15, 23, 42), (49, 46, 129))          # गहरा नीला रात का रंग
+    }
+    c1, c2 = colors.get(slot_name, ((20, 30, 48), (36, 59, 85)))
+    img = Image.new("RGB", (1280, 720))
+    draw = ImageDraw.Draw(img)
+    for y in range(720):
+        r = int(c1[0] + (c2[0] - c1[0]) * y / 720)
+        g = int(c1[1] + (c2[1] - c1[1]) * y / 720)
+        b = int(c1[2] + (c2[2] - c1[2]) * y / 720)
+        draw.line([(0, y), (1280, y)], fill=(r, g, b))
+    img.save(out_path, "JPEG", quality=92)
+
 def fetch_multiple_images(img_query, folder="pics", count=12):
     os.makedirs(folder, exist_ok=True)
     for f in os.listdir(folder):
         try: os.remove(os.path.join(folder, f))
         except: pass
 
-    wiki_host = "commons." + "wikimedia.org"
-    q = urllib.parse.quote(img_query)
-    api_url = f"https://{wiki_host}/w/api.php?action=query&generator=search&gsrsearch=filetype:bitmap+{q}&gsrnamespace=6&gsrlimit=25&prop=imageinfo&iiprop=url|size&iiurlwidth=1280&format=json"
-    
     downloaded = 0
-    try:
-        req = urllib.request.Request(api_url, headers={"User-Agent": "LiveStreamBot/1.0"})
-        data = json.loads(urllib.request.urlopen(req, timeout=15).read().decode())
-        pages = list(data.get("query", {}).get("pages", {}).values())
-        random.shuffle(pages)
+    # 1. पहले Reddit के पब्लिक नेचर/लैंडस्केप वॉलपेपर फीड से समय के अनुसार असली HD तस्वीरें लाना
+    subreddits = {
+        "morning": "Sunrise+EarthPorn",
+        "afternoon": "EarthPorn+Forest",
+        "evening": "SkyPorn+Sunset",
+        "night": "SpacePorn+NightSky"
+    }
+    sub = subreddits.get(active_slot, "EarthPorn")
+    r_host = "www." + "reddit.com"
+    api_url = f"https://{r_host}/r/{sub}/hot.json?limit=35"
 
-        for p in pages:
+    try:
+        req = urllib.request.Request(api_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        data = json.loads(urllib.request.urlopen(req, timeout=15).read().decode())
+        posts = data.get("data", {}).get("children", [])
+        random.shuffle(posts)
+
+        for post in posts:
             if downloaded >= count:
                 break
-            ii = p.get("imageinfo", [{}])
-            thumb_url = ii.get("thumburl") or ii.get("url")
-            w = ii.get("width", 0)
-            h = ii.get("height", 0)
-            if thumb_url and w > h and w >= 1000:
+            pdata = post.get("data", {})
+            url = pdata.get("url_overridden_by_dest", "")
+            if url.endswith((".jpg", ".jpeg", ".png")) and not pdata.get("over_18"):
                 out_img = os.path.join(folder, f"pic_{downloaded}.jpg")
-                req_img = urllib.request.Request(thumb_url, headers={"User-Agent": "LiveStreamBot/1.0"})
+                req_img = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
                 with urllib.request.urlopen(req_img, timeout=15) as r, open(out_img, "wb") as out_f:
                     out_f.write(r.read())
-                if os.path.exists(out_img) and os.path.getsize(out_img) > 15000:
-                    log(f"Matched Topic Image Downloaded: {downloaded+1}")
-                    downloaded += 1
+                # सुनिश्चित करें कि तस्वीर असली है और चौड़ी (Landscape) है
+                try:
+                    with Image.open(out_img) as im:
+                        w, h = im.size
+                        if w >= 1000 and w > h:
+                            im.convert("RGB").resize((1280, 720)).save(out_img, "JPEG", quality=90)
+                            log(f"Topic HD Photo Saved: {downloaded+1} ({sub})")
+                            downloaded += 1
+                        else:
+                            os.remove(out_img)
+                except Exception:
+                    if os.path.exists(out_img): os.remove(out_img)
     except Exception as e:
-        log(f"Topic image search note: {e}")
+        log(f"Photo fetch note: {e}")
 
-    if downloaded == 0:
-        out_img = os.path.join(folder, "pic_0.jpg")
-        subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=0x16213e:s=1280x720:d=1", "-frames:v", "1", out_img], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # 2. बैकअप: यदि कोई तस्वीर कम पड़े तो समय के मूड के अनुसार खूबसूरत ग्रेडिएंट बनाना (हरा रंग नहीं आएगा)
+    while downloaded < 4:
+        out_img = os.path.join(folder, f"pic_{downloaded}.jpg")
+        create_themed_gradient(out_img, active_slot)
+        downloaded += 1
 
     if os.path.exists(os.path.join(folder, "pic_0.jpg")):
         subprocess.run(["cp", os.path.join(folder, "pic_0.jpg"), "bg.jpg"])
