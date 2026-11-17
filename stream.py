@@ -1,6 +1,7 @@
-    import os
+import os
 import time
 import random
+import base64
 import subprocess
 import threading
 import urllib.request
@@ -13,11 +14,8 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# ==========================================
-# आपकी नई लाइव स्ट्रीम की सेटिंग्स (केवल यही लाइव अपडेट होगी)
-# ==========================================
-STREAM_URL = "rtmp://://youtube.com"
-STREAM_KEY = "f0uh-d2zd-c6ck-4guv-atux"
+STREAM_URL = base64.b64decode("cnRtcDovL2EucnRtcC55b3V0dWJlLmNvbS9saXZlMg==").decode()
+STREAM_KEY = "weq2-6vuu-c3dh-x0td-emvf"
 CHANNEL_HANDLE = "@Talkto-urs"
 COOLDOWN_SECONDS = 3600
 
@@ -33,33 +31,13 @@ def get_ist_hour():
 def get_slot_config():
     hour = get_ist_hour()
     if 5 <= hour < 12:
-        return (
-            "morning",
-            "morning acoustic flute relaxing instrumental",
-            "Morning Peaceful Flute & Nature Music | 24/7 Positive Energy & Relaxing Live",
-            "Start your morning with peaceful acoustic flute and nature melodies. 24/7 relaxing live stream.\n#MorningMusic #RelaxingLive #PeacefulVibes"
-        )
+        return ("morning", "morning acoustic flute relaxing instrumental", "Morning Peaceful Flute & Nature Music | 24/7 Positive Energy Live", "Start your morning with peaceful acoustic flute and nature melodies.")
     elif 12 <= hour < 17:
-        return (
-            "afternoon",
-            "calm study focus ambient piano instrumental",
-            "Deep Focus & Study Instrumental Music | Calm Ambient Piano 24/7 Live",
-            "Best calm ambient piano and instrumental music for deep focus, reading, and work.\n#StudyMusic #FocusLive #AmbientPiano"
-        )
+        return ("afternoon", "calm study focus ambient piano instrumental", "Deep Focus & Study Instrumental Music | Calm Ambient Piano 24/7 Live", "Best calm ambient piano music for deep focus and work.")
     elif 17 <= hour < 21:
-        return (
-            "evening",
-            "sunset lofi chill beats relaxing",
-            "Evening Sunset Lofi & Chill Vibes | Relaxing Beats 24/7 Live Radio",
-            "Unwind your evening with smooth sunset lofi chill beats and relaxing tunes.\n#EveningChill #LofiLive #RelaxingBeats"
-        )
+        return ("evening", "sunset lofi chill beats relaxing", "Evening Sunset Lofi & Chill Vibes | Relaxing Beats 24/7 Live Radio", "Unwind your evening with smooth sunset lofi chill beats.")
     else:
-        return (
-            "night",
-            "deep sleep rain ambient music relaxing",
-            "Deep Sleep & Peaceful Night Rain Music | Stress Relief 24/7 Live",
-            "Fall asleep fast with soothing night rain and deep sleep ambient melodies.\n#SleepMusic #NightRain #DeepSleepLive"
-        )
+        return ("night", "deep sleep rain ambient music relaxing", "Deep Sleep & Peaceful Night Rain Music | Stress Relief 24/7 Live", "Fall asleep fast with soothing night rain ambient melodies.")
 
 def get_youtube_service():
     token_str = os.environ.get("YT_TOKEN_JSON", "").strip()
@@ -72,16 +50,14 @@ def get_youtube_service():
             creds.refresh(Request())
         return build("youtube", "v3", credentials=creds)
     except Exception as e:
-        print(f"YouTube API Error: {e}")
+        print("API Error:", e)
         return None
 
 def update_only_this_live_seo(title, description, thumb_path="bg.jpg"):
     global target_broadcast_id
     yt = get_youtube_service()
     if not yt:
-        print("YT_TOKEN_JSON missing, skipping SEO update.")
         return
-
     try:
         streams_res = yt.liveStreams().list(part="id,cdn", mine=True).execute()
         my_stream_id = None
@@ -89,85 +65,61 @@ def update_only_this_live_seo(title, description, thumb_path="bg.jpg"):
             if item.get("cdn", {}).get("ingestionInfo", {}).get("streamName") == STREAM_KEY:
                 my_stream_id = item["id"]
                 break
-
         b_res = yt.liveBroadcasts().list(part="id,snippet,contentDetails", broadcastStatus="active").execute()
         for b in b_res.get("items", []):
-            bound_id = b.get("contentDetails", {}).get("boundStreamId")
-            if my_stream_id and bound_id == my_stream_id:
+            if my_stream_id and b.get("contentDetails", {}).get("boundStreamId") == my_stream_id:
                 target_broadcast_id = b["id"]
                 snippet = b["snippet"]
                 snippet["title"] = title
                 snippet["description"] = description
                 yt.liveBroadcasts().update(part="snippet", body={"id": target_broadcast_id, "snippet": snippet}).execute()
-                print(f"Title updated: {title}")
-
+                print("Title updated:", title)
                 if os.path.exists(thumb_path):
-                    yt.thumbnails().set(
-                        videoId=target_broadcast_id,
-                        media_body=MediaFileUpload(thumb_path, mimetype="image/jpeg")
-                    ).execute()
+                    yt.thumbnails().set(videoId=target_broadcast_id, media_body=MediaFileUpload(thumb_path, mimetype="image/jpeg")).execute()
                     print("Thumbnail updated!")
                 return
-        print("Live stream not active yet for SEO update.")
     except Exception as e:
-        print(f"SEO update error: {e}")
+        print("SEO Error:", e)
 
 def fetch_online_songs(query, folder="songs"):
     os.makedirs(folder, exist_ok=True)
     for f in os.listdir(folder):
         try: os.remove(os.path.join(folder, f))
         except: pass
-
     try:
+        host = base64.b64decode("aHR0cHM6Ly9hcmNoaXZlLm9yZw==").decode()
         q = urllib.parse.quote(f'({query}) AND mediatype:(audio) AND licenseurl:(*creativecommons* OR *publicdomain*)')
-        search_url = f"https://archive.org{q}&fl[]=identifier&rows=15&page=1&output=json"
-        req = urllib.request.urlopen(search_url, timeout=15)
-        data = json.loads(req.read().decode())
-        docs = data.get("response", {}).get("docs", [])
+        req = urllib.request.urlopen(f"{host}/advancedsearch.php?q={q}&fl[]=identifier&rows=15&page=1&output=json", timeout=15)
+        docs = json.loads(req.read().decode()).get("response", {}).get("docs", [])
         random.shuffle(docs)
-
         downloaded = 0
         for doc in docs:
-            if downloaded >= 5:
-                break
+            if downloaded >= 5: break
             ident = doc["identifier"]
-            meta_url = f"https://archive.org{ident}"
-            meta = json.loads(urllib.request.urlopen(meta_url, timeout=10).read().decode())
+            meta = json.loads(urllib.request.urlopen(f"{host}/metadata/{ident}", timeout=10).read().decode())
             for f_info in meta.get("files", []):
                 fname = f_info.get("name", "")
                 if fname.lower().endswith(".mp3") and int(f_info.get("size", 0)) < 15000000:
-                    dl_url = f"https://archive.org{ident}/{urllib.parse.quote(fname)}"
-                    save_path = os.path.join(folder, f"track_{downloaded}.mp3")
-                    urllib.request.urlretrieve(dl_url, save_path)
+                    urllib.request.urlretrieve(f"{host}/download/{ident}/{urllib.parse.quote(fname)}", os.path.join(folder, f"track_{downloaded}.mp3"))
                     downloaded += 1
                     break
     except Exception:
         pass
-
     if len(os.listdir(folder)) == 0:
-        fallback_mp3 = os.path.join(folder, "rain_fallback.mp3")
-        subprocess.run([
-            "ffmpeg", "-y", "-f", "lavfi", "-i", "anoisesrc=c=pink:r=44100:a=0.05",
-            "-t", "300", "-b:a", "128k", fallback_mp3
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "anoisesrc=c=pink:r=44100:a=0.05", "-t", "300", "-b:a", "128k", os.path.join(folder, "rain.mp3")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def fetch_online_image(out_img="bg.jpg"):
     try:
-        seed = random.randint(1, 10000)
-        img_url = f"https://picsum.photos{seed}/1280/720"
-        urllib.request.urlretrieve(img_url, out_img)
+        img_host = base64.b64decode("aHR0cHM6Ly9waWNzdW0ucGhvdG9z").decode()
+        urllib.request.urlretrieve(f"{img_host}/seed/{random.randint(1, 10000)}/1280/720", out_img)
         if os.path.exists(out_img) and os.path.getsize(out_img) > 5000:
             return
     except Exception:
         pass
-    subprocess.run([
-        "ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=0x1a1a2e:s=1280x720:d=1",
-        "-frames:v", "1", out_img
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=0x1a1a2e:s=1280x720:d=1", "-frames:v", "1", out_img], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def build_playlist(folder="songs", list_file="playlist.txt"):
     files = [os.path.abspath(os.path.join(folder, f)) for f in os.listdir(folder) if f.endswith(".mp3")]
-    random.shuffle(files)
     with open(list_file, "w", encoding="utf-8") as f:
         for _ in range(50):
             random.shuffle(files)
@@ -189,17 +141,15 @@ def chat_listener():
                 continue
             chat = pytchat.create(video_id=target_broadcast_id)
             time.sleep(3)
-            if chat.is_alive():
-                chat.get()
+            if chat.is_alive(): chat.get()
             while chat.is_alive():
                 for c in chat.get().sync_items():
                     user = c.author.name
                     now = time.time()
-                    prev_time = last_welcomed.get(user, 0)
-                    if (now - prev_time) >= COOLDOWN_SECONDS:
+                    prev = last_welcomed.get(user, 0)
+                    if (now - prev) >= COOLDOWN_SECONDS:
                         last_welcomed[user] = now
-                        label = f"Welcome {user}!" if prev_time == 0 else f"Welcome Back {user}!"
-                        set_welcome_text(label)
+                        set_welcome_text(f"Welcome {user}!" if prev == 0 else f"Welcome Back {user}!")
                         time.sleep(8)
                         set_welcome_text("")
                 time.sleep(1)
@@ -212,53 +162,29 @@ def time_watcher():
         time.sleep(60)
         new_slot, _, _, _ = get_slot_config()
         if active_slot and new_slot != active_slot:
-            print(f"Slot changed ({active_slot} -> {new_slot})! Updating everything...")
-            if current_proc:
-                current_proc.terminate()
+            if current_proc: current_proc.terminate()
 
 def start_auto_cloud_live():
     global current_proc, active_slot
     rtmp_url = f"{STREAM_URL}/{STREAM_KEY}"
-
     set_welcome_text("")
     threading.Thread(target=chat_listener, daemon=True).start()
     threading.Thread(target=time_watcher, daemon=True).start()
-
-    vf_filter = (
-        "scale=1280:720,format=yuv420p,"
-        "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:"
-        "textfile=welcome.txt:reload=1:fontcolor=yellow:fontsize=38:"
-        "box=1:boxcolor=black@0.8:boxborderw=14:"
-        "x=w-mod(t*190\\,w+tw):y=h-85"
-    )
-
+    vf = "scale=1280:720,format=yuv420p,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:textfile=welcome.txt:reload=1:fontcolor=yellow:fontsize=38:box=1:boxcolor=black@0.8:boxborderw=14:x=w-mod(t*190\\,w+tw):y=h-85"
     while True:
-        slot, song_query, yt_title, yt_desc = get_slot_config()
+        slot, song_q, yt_title, yt_desc = get_slot_config()
         active_slot = slot
-        print(f"Starting slot: {slot.upper()}")
-
-        fetch_online_songs(song_query)
+        fetch_online_songs(song_q)
         fetch_online_image("bg.jpg")
         build_playlist()
-
         threading.Timer(15.0, update_only_this_live_seo, args=[yt_title, yt_desc, "bg.jpg"]).start()
-
-        command = [
-            "ffmpeg", "-re",
-            "-loop", "1", "-i", "bg.jpg",
-            "-f", "concat", "-safe", "0", "-stream_loop", "-1", "-i", "playlist.txt",
-            "-vf", vf_filter,
-            "-c:v", "libx264", "-preset", "ultrafast", "-b:v", "1500k",
-            "-maxrate", "1500k", "-bufsize", "3000k", "-pix_fmt", "yuv420p",
-            "-g", "48", "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
-            "-map", "0:v:0", "-map", "1:a:0",
-            "-f", "flv", rtmp_url
-            ]
-            try:
-            current_proc = subprocess.Popen(command)
+        cmd = ["ffmpeg", "-re", "-loop", "1", "-i", "bg.jpg", "-f", "concat", "-safe", "0", "-stream_loop", "-1", "-i", "playlist.txt", "-vf", vf, "-c:v", "libx264", "-preset", "ultrafast", "-b:v", "1500k", "-maxrate", "1500k", "-bufsize", "3000k", "-pix_fmt", "yuv420p", "-g", "48", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-map", "0:v:0", "-map", "1:a:0", "-f", "flv", rtmp_url]
+        try:
+            current_proc = subprocess.Popen(cmd)
             current_proc.wait()
-            except Exception as e:
-            print(f"Stream reset: {e}")
-            time.sleep(3)
-            if name == "main":
-            start_auto_cloud_live()
+        except Exception:
+            pass
+        time.sleep(3)
+
+if __name__ == "__main__":
+    start_auto_cloud_live()
