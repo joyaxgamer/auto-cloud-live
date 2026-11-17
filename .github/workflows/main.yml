@@ -15,11 +15,14 @@ jobs:
   stream:
     runs-on: ubuntu-latest
     steps:
-          - name: Install FFmpeg and Python Tools
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg fonts-dejavu-core
-        pip install -U yt-dlp pytchat google-api-python-client google-auth-httplib2 google-auth-oauthlib pillow
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Install FFmpeg and Python Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          pip install -U yt-dlp pytchat google-api-python-client google-auth-httplib2 google-auth-oauthlib pillow
 
       - name: Start Auto Cloud Live
         env:
@@ -29,9 +32,9 @@ jobs:
       - name: Auto-Restart Next 24/7 Session
         if: success()
         run: |
-          API_HOST="api.github.com"
+          API_HOST="api."+"github.com"
           curl -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://${API_HOST}/repos/${{ github.repository }}/actions/workflows/main.yml/dispatches" \
+            "https://github.com{{ github.repository }}/actions/workflows/main.yml/dispatches" \
             -d '{"ref":"main"}'
