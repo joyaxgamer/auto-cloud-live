@@ -216,8 +216,7 @@ def start_auto_cloud_live():
         build_media_lists()
 
         threading.Thread(target=update_only_this_live_seo, args=(yt_title, yt_desc, "bg.jpg"), daemon=True).start()
-
-                cmd = [
+        cmd = [
             "ffmpeg", "-re",
             "-f", "concat", "-safe", "0", "-stream_loop", "-1", "-i", "images_list.txt",
             "-f", "concat", "-safe", "0", "-stream_loop", "-1", "-i", "playlist.txt",
