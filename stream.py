@@ -1,4 +1,4 @@
-import os
+    import os
 import time
 import random
 import subprocess
@@ -251,3 +251,14 @@ def start_auto_cloud_live():
             "-c:v", "libx264", "-preset", "ultrafast", "-b:v", "1500k",
             "-maxrate", "1500k", "-bufsize", "3000k", "-pix_fmt", "yuv420p",
             "-g", "48", "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-f", "flv", rtmp_url
+            ]
+            try:
+            current_proc = subprocess.Popen(command)
+            current_proc.wait()
+            except Exception as e:
+            print(f"Stream reset: {e}")
+            time.sleep(3)
+            if name == "main":
+            start_auto_cloud_live()
