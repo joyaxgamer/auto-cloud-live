@@ -20,9 +20,11 @@ jobs:
 
       - name: Install FFmpeg and Python Tools
         run: |
+                - name: Install FFmpeg and Python Tools
+        run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-dejavu-core
-          pip install -U yt-dlp pytchat google-api-python-client google-auth-httplib2 google-auth-oauthlib
+          pip install -U yt-dlp pytchat google-api-python-client google-auth-httplib2 google-auth-oauthlib pillow
 
       - name: Start Auto Cloud Live
         env:
