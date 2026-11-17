@@ -7,7 +7,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 STREAM_HOST = "://youtube.com"
-STREAM_URL = "rtmp://" + STREAM_HOST + "/live2"
+STREAM_URL = "rtmp://a.rtmp.youtube.com/live2"
 STREAM_KEY = "weq2-6vuu-c3dh-x0td-emvf"
 COOLDOWN_SECONDS = 3600
 
