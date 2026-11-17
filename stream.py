@@ -200,8 +200,8 @@ def start_auto_cloud_live():
     threading.Thread(target=chat_listener, daemon=True).start()
     threading.Thread(target=time_watcher, daemon=True).start()
 
-    f1 = "[0:v]scale=1280:720,format=yuv420p,fade=t=in:st=0:d=2,fade=t=out:st=298:d=2,zoompan=z='min(zoom+0.00025,1.10)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1280x720[bg];"
-    f2 = "[1:a]showwaves=s=1280x55:mode=cline:rate=25:colors=white@0.4[waves];[bg][waves]overlay=0:H-55[with_waves];"
+    f1 = "[0:v]scale=1280:720,fps=24,format=yuv420p,fade=t=in:st=0:d=2,fade=t=out:st=298:d=2[bg];"
+    f2 = "[1:a]showwaves=s=1280x50:mode=line:rate=24:colors=white@0.4[waves];[bg][waves]overlay=0:H-50[with_waves];"
     f3 = f"[with_waves]drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='{CHANNEL_DISPLAY}  •  24/7 LIVE':fontcolor=white@0.9:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=10:x=25:y=25,"
     f4 = f"drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='SUBSCRIBE {CHANNEL_DISPLAY}  •  Like & Share for 24/7 Relaxing Music  •  Stay Connected':fontcolor=white@0.85:fontsize=24:box=1:boxcolor=black@0.45:boxborderw=8:x=w-mod(t*95\\,w+tw):y=h-92,"
     f5 = "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:textfile=welcome.txt:reload=1:fontcolor=yellow:fontsize=34:box=1:boxcolor=black@0.75:boxborderw=12:x=w-mod(t*180\\,w+tw):y=h-145[vout]"
