@@ -217,7 +217,7 @@ def start_auto_cloud_live():
 
         threading.Thread(target=update_only_this_live_seo, args=(yt_title, yt_desc, "bg.jpg"), daemon=True).start()
 
-        cmd = [
+                cmd = [
             "ffmpeg", "-re",
             "-f", "concat", "-safe", "0", "-stream_loop", "-1", "-i", "images_list.txt",
             "-f", "concat", "-safe", "0", "-stream_loop", "-1", "-i", "playlist.txt",
@@ -225,7 +225,7 @@ def start_auto_cloud_live():
             "-map", "[vout]", "-map", "1:a:0",
             "-c:v", "libx264", "-preset", "ultrafast", "-b:v", "1800k",
             "-maxrate", "1800k", "-bufsize", "3600k", "-pix_fmt", "yuv420p",
-            "-g", "50", "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+            "-g", "48", "-r", "24", "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
             "-f", "flv", rtmp_url
         ]
         try:
