@@ -6,11 +6,17 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
+# ========================================================
+# आसान सेटिंग्स (जब चाहें यहाँ से समय या टेक्स्ट बदलें)
+# ========================================================
+IMAGE_CHANGE_SECONDS = 600   # फोटो बदलने का समय सेकंड में (300 = 5 मिनट, 600 = 10 मिनट, 900 = 15 मिनट)
+CHANNEL_DISPLAY = "@Talkto-urs"
+TICKER_TEXT = "SUBSCRIBE @Talkto-urs  •  Like & Share for 24/7 Relaxing Music  •  Stay Connected"
+COOLDOWN_SECONDS = 3600      # 1 घंटे बाद दोबारा चैट वेलकम दिखाने के लिए
+
 STREAM_HOST = "a.rtmp." + "youtube.com"
 STREAM_URL = "rtmp://" + STREAM_HOST + "/live2"
 STREAM_KEY = "weq2-6vuu-c3dh-x0td-emvf"
-CHANNEL_DISPLAY = "@Talkto-urs"
-COOLDOWN_SECONDS = 3600
 
 last_welcomed = {}
 current_proc = None
@@ -91,7 +97,6 @@ def update_only_this_live_seo(title, description, thumb_path="bg.jpg"):
                     return
         except Exception as e:
             log(f"SEO Update Error: {e}")
-
 def fetch_online_songs(query, folder="songs"):
     os.makedirs(folder, exist_ok=True)
     for f in os.listdir(folder):
@@ -123,6 +128,7 @@ def fetch_online_songs(query, folder="songs"):
             "-i", "anoisesrc=c=pink:r=44100:a=0.04,aecho=0.8:0.88:60:0.4",
             "-t", "300", "-b:a", "128k", os.path.join(folder, "ambient_rain.mp3")
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
 def fetch_multiple_images(folder="pics", count=12):
     os.makedirs(folder, exist_ok=True)
     pic_host = "picsum" + ".photos"
@@ -151,9 +157,9 @@ def build_media_lists():
             random.shuffle(p_files)
             for p in p_files:
                 f.write(f"file '{p}'\n")
-                f.write("duration 300\n")
+                f.write(f"duration {IMAGE_CHANGE_SECONDS}\n")
         if p_files:
-            f.write(f"file '{p_files[0]}'\n")
+            f.write(f"file '{p_files}'\n")
 
 def set_welcome_text(msg):
     with open("welcome.txt", "w", encoding="utf-8") as f: f.write(msg)
@@ -191,7 +197,9 @@ def time_watcher():
         new_slot, _, _, _ = get_slot_config()
         if active_slot and new_slot != active_slot:
             log(f"Slot changed ({active_slot} -> {new_slot})! Updating all media & SEO...")
-            if current_proc: current_proc.terminate()
+            active_slot = new_slot
+            if current_proc:
+                current_proc.terminate()
 
 def start_auto_cloud_live():
     global current_proc, active_slot
@@ -200,10 +208,11 @@ def start_auto_cloud_live():
     threading.Thread(target=chat_listener, daemon=True).start()
     threading.Thread(target=time_watcher, daemon=True).start()
 
-    f1 = "[0:v]scale=1280:720,fps=24,format=yuv420p,fade=t=in:st=0:d=2,fade=t=out:st=298:d=2[bg];"
+    fade_out_start = max(10, IMAGE_CHANGE_SECONDS - 2)
+    f1 = f"[0:v]scale=1280:720,fps=24,format=yuv420p,fade=t=in:st=0:d=2,fade=t=out:st={fade_out_start}:d=2[bg];"
     f2 = "[1:a]showwaves=s=1280x50:mode=line:rate=24:colors=white@0.4[waves];[bg][waves]overlay=0:H-50[with_waves];"
     f3 = f"[with_waves]drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='{CHANNEL_DISPLAY}  •  24/7 LIVE':fontcolor=white@0.9:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=10:x=25:y=25,"
-    f4 = f"drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='SUBSCRIBE {CHANNEL_DISPLAY}  •  Like & Share for 24/7 Relaxing Music  •  Stay Connected':fontcolor=white@0.85:fontsize=24:box=1:boxcolor=black@0.45:boxborderw=8:x=w-mod(t*95\\,w+tw):y=h-92,"
+    f4 = f"drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='{TICKER_TEXT}':fontcolor=white@0.85:fontsize=24:box=1:boxcolor=black@0.45:boxborderw=8:x=w-mod(t*95\\,w+tw):y=h-92,"
     f5 = "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:textfile=welcome.txt:reload=1:fontcolor=yellow:fontsize=34:box=1:boxcolor=black@0.75:boxborderw=12:x=w-mod(t*180\\,w+tw):y=h-145[vout]"
     filter_complex = f1 + f2 + f3 + f4 + f5
 
@@ -216,6 +225,7 @@ def start_auto_cloud_live():
         build_media_lists()
 
         threading.Thread(target=update_only_this_live_seo, args=(yt_title, yt_desc, "bg.jpg"), daemon=True).start()
+
         cmd = [
             "ffmpeg", "-re",
             "-f", "concat", "-safe", "0", "-stream_loop", "-1", "-i", "images_list.txt",
