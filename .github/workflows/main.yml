@@ -32,7 +32,7 @@ jobs:
       - name: Auto-Restart Next 24/7 Session
         if: success()
         run: |
-          API_HOST="://github.com"
+          API_HOST="api.github.com"
           curl -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
