@@ -47,7 +47,7 @@ def get_youtube_service():
         log("ERROR: YT_TOKEN_JSON secret empty! Check GitHub Secrets.")
         return None
     try:
-        creds = Credentials.from_authorized_user_info(json.loads(token_str))
+        creds = Credentials.from_authorized_user_info(json.loads(token_str, strict=False))
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
         return build("youtube", "v3", credentials=creds)
