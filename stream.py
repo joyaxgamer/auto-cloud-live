@@ -143,23 +143,27 @@ def fetch_multiple_images(folder="pics", count=12):
             subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=0x16213e:s=1280x720:d=1", "-frames:v", "1", out_img], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if os.path.exists(os.path.join(folder, "pic_0.jpg")):
         subprocess.run(["cp", os.path.join(folder, "pic_0.jpg"), "bg.jpg"])
+        subprocess.run(["cp", os.path.join(folder, "pic_0.jpg"), "live_bg.jpg"])
 
-def build_media_lists():
+def build_song_playlist():
     s_files = [os.path.abspath(os.path.join("songs", f)) for f in os.listdir("songs") if f.endswith(".mp3")]
     with open("playlist.txt", "w", encoding="utf-8") as f:
         for _ in range(50):
             random.shuffle(s_files)
             for p in s_files: f.write(f"file '{p}'\n")
 
-    p_files = [os.path.abspath(os.path.join("pics", f)) for f in os.listdir("pics") if f.endswith(".jpg")]
-    with open("images_list.txt", "w", encoding="utf-8") as f:
-        for _ in range(30):
-            random.shuffle(p_files)
-            for p in p_files:
-                f.write(f"file '{p}'\n")
-                f.write(f"duration {IMAGE_CHANGE_SECONDS}\n")
+# हर IMAGE_CHANGE_SECONDS में बिना स्ट्रीम रोके बैकग्राउंड फोटो बदलने वाला थ्रेड
+def image_rotator_loop():
+    idx = 1
+    while True:
+        time.sleep(IMAGE_CHANGE_SECONDS)
+        p_files = [os.path.join("pics", f) for f in os.listdir("pics") if f.endswith(".jpg")]
         if p_files:
-            f.write(f"file '{p_files}'\n")
+            chosen = p_files[idx % len(p_files)]
+            idx += 1
+            subprocess.run(["cp", chosen, "temp_bg.jpg"])
+            os.replace("temp_bg.jpg", "live_bg.jpg")
+            log(f"Background image rotated -> {chosen}")
 
 def set_welcome_text(msg):
     with open("welcome.txt", "w", encoding="utf-8") as f: f.write(msg)
@@ -207,9 +211,9 @@ def start_auto_cloud_live():
     set_welcome_text("")
     threading.Thread(target=chat_listener, daemon=True).start()
     threading.Thread(target=time_watcher, daemon=True).start()
+    threading.Thread(target=image_rotator_loop, daemon=True).start()
 
-    fade_out_start = max(10, IMAGE_CHANGE_SECONDS - 2)
-    f1 = f"[0:v]scale=1280:720,fps=24,format=yuv420p,fade=t=in:st=0:d=2,fade=t=out:st={fade_out_start}:d=2[bg];"
+    f1 = "[0:v]scale=1280:720,format=yuv420p[bg];"
     f2 = "[1:a]showwaves=s=1280x50:mode=line:rate=24:colors=white@0.4[waves];[bg][waves]overlay=0:H-50[with_waves];"
     f3 = f"[with_waves]drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='{CHANNEL_DISPLAY}  •  24/7 LIVE':fontcolor=white@0.9:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=10:x=25:y=25,"
     f4 = f"drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='{TICKER_TEXT}':fontcolor=white@0.85:fontsize=24:box=1:boxcolor=black@0.45:boxborderw=8:x=w-mod(t*95\\,w+tw):y=h-92,"
@@ -219,22 +223,22 @@ def start_auto_cloud_live():
     while True:
         slot, song_q, yt_title, yt_desc = get_slot_config()
         active_slot = slot
-        log(f"Starting upgraded slot: {slot.upper()}")
+        log(f"Starting smooth slot: {slot.upper()}")
         fetch_online_songs(song_q)
         fetch_multiple_images("pics", 12)
-        build_media_lists()
+        build_song_playlist()
 
         threading.Thread(target=update_only_this_live_seo, args=(yt_title, yt_desc, "bg.jpg"), daemon=True).start()
 
         cmd = [
             "ffmpeg", "-re",
-            "-f", "concat", "-safe", "0", "-stream_loop", "-1", "-i", "images_list.txt",
+            "-f", "image2", "-loop", "1", "-r", "24", "-i", "live_bg.jpg",
             "-f", "concat", "-safe", "0", "-stream_loop", "-1", "-i", "playlist.txt",
             "-filter_complex", filter_complex,
             "-map", "[vout]", "-map", "1:a:0",
             "-c:v", "libx264", "-preset", "ultrafast", "-b:v", "1800k",
             "-maxrate", "1800k", "-bufsize", "3600k", "-pix_fmt", "yuv420p",
-            "-g", "48", "-r", "24", "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+            "-g", "48", "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
             "-f", "flv", rtmp_url
         ]
         try:
