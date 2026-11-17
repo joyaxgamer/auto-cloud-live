@@ -29,12 +29,11 @@ jobs:
           YT_TOKEN_JSON: ${{ secrets.YT_TOKEN_JSON }}
         run: timeout 19800 python stream.py || true
 
-      - name: Auto-Restart Next 24/7 Session
+            - name: Auto-Restart Next 24/7 Session
         if: success()
         run: |
-          API_HOST="api."+"github.com"
           curl -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://github.com{{ github.repository }}/actions/workflows/main.yml/dispatches" \
+            "https://github.com" \
             -d '{"ref":"main"}'
