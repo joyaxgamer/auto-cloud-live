@@ -7,10 +7,14 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 
-IMAGE_CHANGE_SECONDS = 600
+# ========================================================
+# आसान कंट्रोल बॉक्स (जब चाहें यहाँ से समय, आवाज़ या टेक्स्ट बदलें)
+# ========================================================
+IMAGE_CHANGE_SECONDS = 600   # हर 10 मिनट (600 सेकंड) में बैकग्राउंड फोटो बदलेगी
+MUSIC_VOLUME = 2.2           # संगीत की आवाज़ (2.2 = दोगुनी तेज़ और साफ़ आवाज़)
 CHANNEL_DISPLAY = "@Talkto-urs"
 TICKER_TEXT = "SUBSCRIBE @Talkto-urs  •  Like & Share for 24/7 Relaxing Music  •  Stay Connected"
-COOLDOWN_SECONDS = 3600
+COOLDOWN_SECONDS = 3600      # 1 घंटे बाद दोबारा चैट वेलकम दिखाने के लिए
 
 STREAM_HOST = "a.rtmp." + "youtube.com"
 STREAM_URL = "rtmp://" + STREAM_HOST + "/live2"
@@ -32,8 +36,7 @@ def get_slot_config():
     if 5 <= h < 12:
         return (
             "morning",
-            "morning acoustic flute uplifting peaceful instrumental",
-            "sunrise morning nature mountains lake",
+            "peaceful flute acoustic guitar morning instrumental music",
             "PEACEFUL MORNING • BOOST ENERGY • FRESH START",
             "Morning Peaceful Flute & Nature Music | 24/7 Positive Energy Live",
             "Start your morning with peaceful flute melodies and positive vibes.\n#MorningMusic #BoostEnergy #RelaxingLive"
@@ -41,8 +44,7 @@ def get_slot_config():
     elif 12 <= h < 17:
         return (
             "afternoon",
-            "calm study focus ambient piano instrumental",
-            "peaceful forest green nature calm lake",
+            "soft solo piano relaxing study instrumental music",
             "DEEP FOCUS • STUDY & WORK • CALM MIND",
             "Deep Focus & Study Instrumental Music | Calm Ambient Piano 24/7 Live",
             "Best calm ambient piano for deep focus, reading, and work.\n#StudyMusic #FocusLive #AmbientPiano"
@@ -50,8 +52,7 @@ def get_slot_config():
     elif 17 <= h < 21:
         return (
             "evening",
-            "sunset lofi chill beats relaxing guitar",
-            "golden sunset sky clouds evening landscape",
+            "chillhop lofi beats relaxing guitar instrumental",
             "EVENING CHILL • SUNSET LOFI • RELAXING VIBES",
             "Evening Sunset Lofi & Chill Vibes | Relaxing Beats 24/7 Live",
             "Unwind your evening with smooth sunset lofi chill beats and guitar.\n#EveningChill #LofiLive #SunsetVibes"
@@ -59,8 +60,7 @@ def get_slot_config():
     else:
         return (
             "night",
-            "deep sleep night rain ambient meditation music",
-            "starry night sky moon dark calm nature",
+            "deep sleep soft piano ambient meditation instrumental",
             "DEEP SLEEP • PEACEFUL NIGHT • STRESS RELIEF",
             "Deep Sleep & Peaceful Night Rain Music | Stress Relief 24/7 Live",
             "Fall asleep fast with soothing night rain and deep sleep ambient melodies.\n#SleepMusic #NightRain #DeepSleepLive"
@@ -158,45 +158,50 @@ def update_only_this_live_seo(title, description, thumb_path="bg.jpg", tagline="
                     return
         except Exception as e:
             log(f"SEO Update Error: {e}")
+# खराब/स्पीच/शोर वाली फ़ाइलों को रोककर केवल 18 हाई-क्वालिटी मधुर धुनें डाउनलोड करना
 def fetch_online_songs(query, slot_name="morning", folder="songs"):
     os.makedirs(folder, exist_ok=True)
     for f in os.listdir(folder):
         try: os.remove(os.path.join(folder, f))
         except: pass
+
+    bad_words = ["speech", "talk", "podcast", "lecture", "interview", "noise", "test", "beep", "sfx", "voice", "audiobook"]
     try:
         arch_host = "archive" + ".org"
-        q = urllib.parse.quote(f'({query}) AND mediatype:(audio) AND licenseurl:(*publicdomain* OR *zero*)')
-        url = f"https://{arch_host}/advancedsearch.php?q={q}&fl[]=identifier&rows=30&page=1&output=json"
+        q = urllib.parse.quote(f'({query}) AND mediatype:(audio) AND format:(MP3) AND licenseurl:(*creativecommons* OR *publicdomain* OR *zero*)')
+        url = f"https://{arch_host}/advancedsearch.php?q={q}&fl[]=identifier&sort[]=downloads+desc&rows=50&page=1&output=json"
         docs = json.loads(urllib.request.urlopen(url, timeout=15).read().decode()).get("response", {}).get("docs", [])
         random.shuffle(docs)
         count = 0
         for doc in docs:
-            if count >= 12: break
+            if count >= 18: break
             ident = doc["identifier"]
+            if any(bw in ident.lower() for bw in bad_words):
+                continue
             meta = json.loads(urllib.request.urlopen(f"https://{arch_host}/metadata/{ident}", timeout=10).read().decode())
             for fi in meta.get("files", []):
                 fn = fi.get("name", "")
-                if fn.lower().endswith(".mp3") and int(fi.get("size", 0)) < 15000000:
-                    urllib.request.urlretrieve(f"https://{arch_host}/download/{ident}/{urllib.parse.quote(fn)}", os.path.join(folder, f"track_{count}.mp3"))
+                fsize = int(fi.get("size", 0))
+                # केवल 2 MB से 18 MB के बीच की असली संगीत फ़ाइलें (खराब क्लिप और भारी फ़ाइलें बाहर)
+                if fn.lower().endswith(".mp3") and 2000000 < fsize < 18000000:
+                    if any(bw in fn.lower() for bw in bad_words):
+                        continue
+                    save_path = os.path.join(folder, f"track_{count}.mp3")
+                    urllib.request.urlretrieve(f"https://{arch_host}/download/{ident}/{urllib.parse.quote(fn)}", save_path)
+                    log(f"Verified Quality Tune [{slot_name}] #{count+1}: {fn}")
                     count += 1
                     break
     except Exception as e:
         log(f"Song fetch note: {e}")
 
     if len(os.listdir(folder)) == 0:
-        fallback_tones = {
-            "morning": "sine=f=432:r=44100:d=300,volume=0.05",
-            "afternoon": "anoisesrc=c=brown:r=44100:a=0.03",
-            "evening": "anoisesrc=c=pink:r=44100:a=0.03,aecho=0.8:0.88:60:0.4",
-            "night": "anoisesrc=c=pink:r=44100:a=0.05,lowpass=f=400"
-        }
-        af = fallback_tones.get(slot_name, "anoisesrc=c=pink:r=44100:a=0.04")
         subprocess.run([
-            "ffmpeg", "-y", "-f", "lavfi", "-i", af,
-            "-t", "300", "-b:a", "128k", os.path.join(folder, f"{slot_name}_ambient.mp3")
+            "ffmpeg", "-y", "-f", "lavfi",
+            "-i", "anoisesrc=c=pink:r=44100:a=0.12,lowpass=f=450,aecho=0.8:0.88:60:0.4",
+            "-t", "300", "-b:a", "192k", os.path.join(folder, "gentle_rain.mp3")
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-def fetch_multiple_images(img_query, folder="pics", count=12):
+def fetch_multiple_images(folder="pics", count=12):
     os.makedirs(folder, exist_ok=True)
     for f in os.listdir(folder):
         try: os.remove(os.path.join(folder, f))
@@ -225,12 +230,12 @@ def fetch_multiple_images(img_query, folder="pics", count=12):
         log(f"Bing photo note: {e}")
 
     nature_seeds = {
-        "morning": list([10, 11, 13, 14, 15, 16, 17, 28]),
-        "afternoon": list([18, 19, 25, 29, 37, 42, 43, 48]),
-        "evening": list([49, 54, 55, 56, 57, 65, 70, 74]),
-        "night": list([76, 82, 84, 88, 90, 96, 103, 110])
+        "morning": list((10, 11, 13, 14, 15, 16, 17, 28, 29)),
+        "afternoon": list((18, 19, 24, 25, 37, 42, 48, 54, 57)),
+        "evening": list((65, 70, 74, 82, 84, 88, 92, 103, 110)),
+        "night": list((116, 120, 124, 128, 134, 141, 145, 152, 160))
     }
-    seeds = nature_seeds.get(active_slot, list([10, 11, 13, 14, 15, 16]))
+    seeds = nature_seeds.get(active_slot, list((10, 11, 13, 14, 15)))
     random.shuffle(seeds)
 
     pic_host = "picsum." + "photos"
@@ -305,7 +310,7 @@ def time_watcher():
     global current_proc, active_slot
     while True:
         time.sleep(60)
-        new_slot, _, _, _, _, _ = get_slot_config()
+        new_slot, _, _, _, _ = get_slot_config()
         if active_slot and new_slot != active_slot:
             log(f"Slot changed ({active_slot} -> {new_slot})! Updating all media & SEO...")
             active_slot = new_slot
@@ -321,18 +326,18 @@ def start_auto_cloud_live():
     threading.Thread(target=image_rotator_loop, daemon=True).start()
 
     f1 = "[0:v]scale=1280:720,format=yuv420p[bg];"
-    f2 = "[1:a]showwaves=s=1280x50:mode=line:rate=24:colors=white@0.4[waves];[bg][waves]overlay=0:H-50[with_waves];"
+    f2 = f"[1:a]dynaudnorm=f=150:g=15,volume={MUSIC_VOLUME},asplit=2[aout][awaves];[awaves]showwaves=s=1280x50:mode=line:rate=24:colors=white@0.4[waves];[bg][waves]overlay=0:H-50[with_waves];"
     f3 = f"[with_waves]drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='{CHANNEL_DISPLAY}  •  24/7 LIVE':fontcolor=white@0.9:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=10:x=25:y=25,"
     f4 = f"drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='{TICKER_TEXT}':fontcolor=white@0.85:fontsize=24:box=1:boxcolor=black@0.45:boxborderw=8:x=w-mod(t*95\\,w+tw):y=h-92,"
     f5 = "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:textfile=welcome.txt:reload=1:fontcolor=yellow:fontsize=34:box=1:boxcolor=black@0.75:boxborderw=12:x=w-mod(t*180\\,w+tw):y=h-145[vout]"
     filter_complex = f1 + f2 + f3 + f4 + f5
 
     while True:
-        slot, song_q, img_q, tagline, yt_title, yt_desc = get_slot_config()
+        slot, song_q, tagline, yt_title, yt_desc = get_slot_config()
         active_slot = slot
-        log(f"Starting smooth slot: {slot.upper()}")
+        log(f"Starting upgraded slot: {slot.upper()}")
         fetch_online_songs(song_q, slot)
-        fetch_multiple_images(img_q, "pics", 12)
+        fetch_multiple_images("pics", 12)
         build_song_playlist()
 
         threading.Thread(target=update_only_this_live_seo, args=(yt_title, yt_desc, "bg.jpg", tagline), daemon=True).start()
@@ -342,10 +347,10 @@ def start_auto_cloud_live():
             "-f", "image2", "-loop", "1", "-r", "24", "-i", "live_bg.jpg",
             "-f", "concat", "-safe", "0", "-stream_loop", "-1", "-i", "playlist.txt",
             "-filter_complex", filter_complex,
-            "-map", "[vout]", "-map", "1:a:0",
+            "-map", "[vout]", "-map", "[aout]",
             "-c:v", "libx264", "-preset", "ultrafast", "-b:v", "1800k",
             "-maxrate", "1800k", "-bufsize", "3600k", "-pix_fmt", "yuv420p",
-            "-g", "48", "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+            "-g", "48", "-c:a", "aac", "-b:a", "192k", "-ar", "44100",
             "-f", "flv", rtmp_url
         ]
         try:
