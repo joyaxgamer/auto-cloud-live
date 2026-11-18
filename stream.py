@@ -158,60 +158,54 @@ def update_only_this_live_seo(title, description, thumb_path="bg.jpg", tagline="
                     return
         except Exception as e:
             log(f"SEO Update Error: {e}")
-# खराब/स्पीच/शोर वाली फ़ाइलों को रोककर केवल 18 हाई-क्वालिटी मधुर धुनें डाउनलोड करना
+import shutil
+
 def fetch_online_songs(query, slot_name="morning", folder="songs"):
     os.makedirs(folder, exist_ok=True)
     for f in os.listdir(folder):
         try: os.remove(os.path.join(folder, f))
         except: pass
 
-    # हर स्लॉट के लिए सरल और सटीक कीवर्ड ताकि पक्का असली गाने मिलें
-    easy_queries = {
-        "morning": "flute acoustic guitar instrumental",
-        "afternoon": "solo piano relaxing instrumental",
-        "evening": "lofi chill beats instrumental",
-        "night": "ambient meditation sleep music"
-    }
-    search_q = easy_queries.get(slot_name, "relaxing instrumental music")
-
+    # आपकी GitHub Release (v1.0) से सीधे आपके अपलोड किए हुए गाने डाउनलोड करना
     try:
-        arch_host = "archive" + ".org"
-        q = urllib.parse.quote(f'({search_q}) AND mediatype:(audio)')
-        url = f"https://{arch_host}/advancedsearch.php?q={q}&fl[]=identifier&sort[]=downloads+desc&rows=40&page=1&output=json"
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        docs = json.loads(urllib.request.urlopen(req, timeout=15).read().decode()).get("response", {}).get("docs", [])
-        random.shuffle(docs)
-        
-        count = 0
-        for doc in docs:
-            if count >= 15: break
-            ident = doc["identifier"]
-            meta_url = f"https://{arch_host}/metadata/{ident}"
-            meta_req = urllib.request.Request(meta_url, headers={"User-Agent": "Mozilla/5.0"})
-            meta = json.loads(urllib.request.urlopen(meta_req, timeout=10).read().decode())
-            for fi in meta.get("files", []):
-                fn = fi.get("name", "")
-                fsize = int(fi.get("size", 0))
-                if fn.lower().endswith(".mp3") and 1000000 < fsize < 25000000:
-                    dl_url = f"https://{arch_host}/download/{ident}/{urllib.parse.quote(fn)}"
-                    save_path = os.path.join(folder, f"track_{count}.mp3")
-                    urllib.request.urlretrieve(dl_url, save_path)
-                    log(f"Downloaded Real Tune [{slot_name}] #{count+1}: {fn}")
-                    count += 1
-                    break
-    except Exception as e:
-        log(f"Song fetch note: {e}")
+        api_h = "api." + "github.com"
+        rel_url = f"https://{api_h}/repos/joyaxgamer/auto-cloud-live/releases/tags/v1.0"
+        req = urllib.request.Request(rel_url, headers={"User-Agent": "Mozilla/5.0"})
+        data = json.loads(urllib.request.urlopen(req, timeout=15).read().decode())
+        assets = data.get("assets", [])
 
-    # यदि फिर भी इंटरनेट से गाना न मिले, तो "सुर्रर्र" शोर के बजाय मधुर संगीतमय कॉर्ड्स बनाना
+        # केवल मौजूदा स्लॉट (morning, afternoon, evening, night) के गाने ही चुनना
+        matched = [
+            a for a in assets
+            if a.get("name", "").lower().endswith(".mp3")
+            and a.get("name", "").lower().startswith(slot_name.lower())
+        ]
+
+        # बैकअप: यदि किसी स्लॉट की फाइल न मिले तो Release के कोई भी mp3 उठा लेना
+        if not matched:
+            matched = [a for a in assets if a.get("name", "").lower().endswith(".mp3")]
+
+        matched.sort(key=lambda x: x.get("name", ""))
+
+        for idx, asset in enumerate(matched):
+            dl_url = asset.get("browser_download_url")
+            orig_name = asset.get("name")
+            save_path = os.path.join(folder, f"track_{idx}.mp3")
+            urllib.request.urlretrieve(dl_url, save_path)
+            log(f"Loaded From Release [{slot_name.upper()}] #{idx+1}: {orig_name}")
+    except Exception as e:
+        log(f"Release song load note: {e}")
+
+    # अंतिम सुरक्षा: यदि Release अभी न बनी हो तो मधुर हार्मोनिक कॉर्ड्स चलाना
     if len(os.listdir(folder)) == 0:
-        log("Generating soft melodic harmonic chords (No noise)...")
+        log("Waiting for v1.0 release songs, playing soft harmonic chords...")
         melody_filter = (
-            "aevalsrc='0.15*sin(2*PI*261.63*t)+0.12*sin(2*PI*329.63*t)+0.12*sin(2*PI*392.00*t)"
-            "+0.08*sin(2*PI*493.88*t)*sin(2*PI*0.25*t)':s=44100:d=300,afade=t=in:st=0:d=4,afade=t=out:st=296:d=4"
+            "aevalsrc='0.15*sin(2*PI*261.63*t)+0.12*sin(2*PI*329.63*t)+0.12*sin(2*PI*392.00*t)'"
+            ":s=44100:d=300,afade=t=in:st=0:d=4,afade=t=out:st=296:d=4"
         )
         subprocess.run([
             "ffmpeg", "-y", "-f", "lavfi", "-i", melody_filter,
-            "-b:a", "192k", os.path.join(folder, "melodic_harmony.mp3")
+            "-b:a", "192k", os.path.join(folder, "melody.mp3")
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def fetch_multiple_images(folder="pics", count=12):
