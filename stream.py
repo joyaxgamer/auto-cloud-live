@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 # आसान कंट्रोल बॉक्स (जब चाहें यहाँ से समय, आवाज़ या टेक्स्ट बदलें)
 # ========================================================
 IMAGE_CHANGE_SECONDS = 600   # हर 10 मिनट (600 सेकंड) में बैकग्राउंड फोटो बदलेगी
-MUSIC_VOLUME = 2.2           # संगीत की आवाज़ (2.2 = दोगुनी तेज़ और साफ़ आवाज़)
+MUSIC_VOLUME = 1.0           # संगीत की आवाज़ (2.2 = दोगुनी तेज़ और साफ़ आवाज़)
 CHANNEL_DISPLAY = "@Talkto-urs"
 TICKER_TEXT = "SUBSCRIBE @Talkto-urs  •  Like & Share for 24/7 Relaxing Music  •  Stay Connected"
 COOLDOWN_SECONDS = 3600      # 1 घंटे बाद दोबारा चैट वेलकम दिखाने के लिए
