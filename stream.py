@@ -225,6 +225,7 @@ def fetch_online_songs(query, slot_name="morning", folder="songs"):
 
 def audio_feeder_loop():
     global current_playing_song
+    os.makedirs("songs", exist_ok=True)
     while True:
         songs = sorted([f for f in os.listdir("songs") if f.endswith(".mp3")])
         if not songs:
