@@ -7,14 +7,11 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 
-# ========================================================
-# आसान कंट्रोल बॉक्स (जब चाहें यहाँ से समय, आवाज़ या टेक्स्ट बदलें)
-# ========================================================
-IMAGE_CHANGE_SECONDS = 600   # हर 10 मिनट (600 सेकंड) में बैकग्राउंड फोटो बदलेगी
-MUSIC_VOLUME = 1.0           # संगीत की आवाज़ (2.2 = दोगुनी तेज़ और साफ़ आवाज़)
+IMAGE_CHANGE_SECONDS = 600
+MUSIC_VOLUME = 1.0
 CHANNEL_DISPLAY = "@Talkto-urs"
 TICKER_TEXT = "SUBSCRIBE @Talkto-urs  •  Like & Share for 24/7 Relaxing Music  •  Stay Connected"
-COOLDOWN_SECONDS = 3600      # 1 घंटे बाद दोबारा चैट वेलकम दिखाने के लिए
+COOLDOWN_SECONDS = 3600
 
 STREAM_HOST = "a.rtmp." + "youtube.com"
 STREAM_URL = "rtmp://" + STREAM_HOST + "/live2"
@@ -24,6 +21,8 @@ last_welcomed = {}
 current_proc = None
 active_slot = None
 target_broadcast_id = None
+current_playing_song = None
+BANNED_FILE = "banned_songs.txt"
 
 def log(msg):
     print(msg, flush=True)
@@ -78,7 +77,6 @@ def get_youtube_service():
     except Exception as e:
         log(f"YouTube API Token Error: {e}")
         return None
-
 def create_stylish_thumbnail(base_img="bg.jpg", out_thumb="stylish_thumb.jpg", slot_name="LIVE", tagline="24/7 LIVE STREAM"):
     try:
         img = Image.open(base_img).convert("RGB").resize((1280, 720))
@@ -158,8 +156,6 @@ def update_only_this_live_seo(title, description, thumb_path="bg.jpg", tagline="
                     return
         except Exception as e:
             log(f"SEO Update Error: {e}")
-BANNED_FILE = "banned_songs.txt"
-current_playing_song = None
 
 def get_banned_songs():
     if not os.path.exists(BANNED_FILE):
@@ -174,8 +170,62 @@ def ban_song(song_name):
     if song_name not in banned:
         with open(BANNED_FILE, "a", encoding="utf-8") as f:
             f.write(song_name + "\n")
-        log(f"COPYRIGHT GUARD: '{song_name}' ko hamesha ke liye block kar diya gaya hai!")
+        log(f"COPYRIGHT GUARD: '{song_name}' ko block kar diya gaya hai!")
+        try:
+            subprocess.run(["git", "config", "user.name", "AutoBot"], check=False)
+            subprocess.run(["git", "config", "user.email", "bot@github.com"], check=False)
+            subprocess.run(["git", "add", BANNED_FILE], check=False)
+            subprocess.run(["git", "commit", "-m", f"Ban copyrighted song: {song_name}"], check=False)
+            subprocess.run(["git", "push"], check=False)
+        except Exception:
+            pass
 
+def fetch_online_songs(query, slot_name="morning", folder="songs"):
+    os.makedirs(folder, exist_ok=True)
+    for f in os.listdir(folder):
+        try: os.remove(os.path.join(folder, f))
+        except: pass
+
+    banned = get_banned_songs()
+    try:
+        api_h = "api." + "github.com"
+        rel_url = f"https://{api_h}/repos/joyaxgamer/auto-cloud-live/releases/tags/v1.0"
+        req = urllib.request.Request(rel_url, headers={"User-Agent": "Mozilla/5.0"})
+        data = json.loads(urllib.request.urlopen(req, timeout=15).read().decode())
+        assets = data.get("assets", [])
+
+        matched = [
+            a for a in assets
+            if a.get("name", "").lower().endswith(".mp3")
+            and a.get("name", "").lower().startswith(slot_name.lower())
+            and a.get("name") not in banned
+        ]
+        if not matched:
+            matched = [
+                a for a in assets
+                if a.get("name", "").lower().endswith(".mp3")
+                and a.get("name") not in banned
+            ]
+        matched.sort(key=lambda x: x.get("name", ""))
+
+        for idx, asset in enumerate(matched):
+            dl_url = asset.get("browser_download_url")
+            orig_name = asset.get("name")
+            save_path = os.path.join(folder, f"{idx:02d}__{orig_name}")
+            urllib.request.urlretrieve(dl_url, save_path)
+            log(f"Loaded Safe Song [{slot_name.upper()}]: {orig_name}")
+    except Exception as e:
+        log(f"Release song load note: {e}")
+
+    if len(os.listdir(folder)) == 0:
+        melody_filter = (
+            "aevalsrc='0.15*sin(2*PI*261.63*t)+0.12*sin(2*PI*329.63*t)+0.12*sin(2*PI*392.00*t)'"
+            ":s=44100:d=300,afade=t=in:st=0:d=4,afade=t=out:st=296:d=4"
+        )
+        subprocess.run([
+            "ffmpeg", "-y", "-f", "lavfi", "-i", melody_filter,
+            "-b:a", "192k", os.path.join(folder, "00__melody.mp3")
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 def copyright_watchdog():
     while True:
         time.sleep(15)
@@ -328,7 +378,6 @@ def start_auto_cloud_live():
 
         threading.Thread(target=update_only_this_live_seo, args=(yt_title, yt_desc, "bg.jpg", tagline), daemon=True).start()
 
-        # एक-एक सुरक्षित गाना बजाना ताकि वीडियो 100% स्मूथ रहे और हर गाने पर निगरानी रहे
         songs = sorted([f for f in os.listdir("songs") if f.endswith(".mp3")])
         for s in songs:
             if active_slot != slot:
@@ -360,5 +409,3 @@ def start_auto_cloud_live():
 
 if __name__ == "__main__":
     start_auto_cloud_live()
-
-
