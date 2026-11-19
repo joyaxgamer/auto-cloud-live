@@ -18,7 +18,7 @@ COOLDOWN_SECONDS = 3600      # 1 घंटे बाद दोबारा च�
 
 STREAM_HOST = "a.rtmp." + "youtube.com"
 STREAM_URL = "rtmp://" + STREAM_HOST + "/live2"
-STREAM_KEY = "weq2-6vuu-c3dh-x0td-emvf"
+STREAM_KEY = "hhaa-pssg-m0we-a0rv-5gsc"
 
 last_welcomed = {}
 current_proc = None
@@ -176,87 +176,6 @@ def ban_song(song_name):
             f.write(song_name + "\n")
         log(f"COPYRIGHT GUARD: '{song_name}' ko hamesha ke liye block kar diya gaya hai!")
 
-def fetch_online_songs(query, slot_name="morning", folder="songs"):
-    os.makedirs(folder, exist_ok=True)
-    for f in os.listdir(folder):
-        try: os.remove(os.path.join(folder, f))
-        except: pass
-
-    banned = get_banned_songs()
-    try:
-        api_h = "api." + "github.com"
-        rel_url = f"https://{api_h}/repos/joyaxgamer/auto-cloud-live/releases/tags/v1.0"
-        req = urllib.request.Request(rel_url, headers={"User-Agent": "Mozilla/5.0"})
-        data = json.loads(urllib.request.urlopen(req, timeout=15).read().decode())
-        assets = data.get("assets", [])
-
-        matched = [
-            a for a in assets
-            if a.get("name", "").lower().endswith(".mp3")
-            and a.get("name", "").lower().startswith(slot_name.lower())
-            and a.get("name") not in banned
-        ]
-        if not matched:
-            matched = [
-                a for a in assets
-                if a.get("name", "").lower().endswith(".mp3")
-                and a.get("name") not in banned
-            ]
-        matched.sort(key=lambda x: x.get("name", ""))
-
-        for idx, asset in enumerate(matched):
-            dl_url = asset.get("browser_download_url")
-            orig_name = asset.get("name")
-            save_path = os.path.join(folder, f"{idx:02d}__{orig_name}")
-            urllib.request.urlretrieve(dl_url, save_path)
-            log(f"Loaded Safe Song [{slot_name.upper()}]: {orig_name}")
-    except Exception as e:
-        log(f"Release song load note: {e}")
-
-    if len(os.listdir(folder)) == 0:
-        melody_filter = (
-            "aevalsrc='0.15*sin(2*PI*261.63*t)+0.12*sin(2*PI*329.63*t)+0.12*sin(2*PI*392.00*t)'"
-            ":s=44100:d=300,afade=t=in:st=0:d=4,afade=t=out:st=296:d=4"
-        )
-        subprocess.run([
-            "ffmpeg", "-y", "-f", "lavfi", "-i", melody_filter,
-            "-b:a", "192k", os.path.join(folder, "00__melody.mp3")
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-def audio_feeder_loop():
-    global current_playing_song
-    os.makedirs("songs", exist_ok=True)
-    while True:
-        songs = sorted([f for f in os.listdir("songs") if f.endswith(".mp3")])
-        if not songs:
-            time.sleep(2)
-            continue
-        for s in songs:
-            orig_name = s.split("__", 1)[-1]
-            if orig_name in get_banned_songs():
-                continue
-            current_playing_song = orig_name
-            log(f"Now Playing: {orig_name}")
-            song_path = os.path.join("songs", s)
-            p = subprocess.Popen(
-                ["ffmpeg", "-re", "-i", song_path, "-f", "s16le", "-ar", "44100", "-ac", "2", "pipe:1"],
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
-            )
-            while True:
-                if orig_name in get_banned_songs():
-                    p.terminate()
-                    log(f"Skipped Banned Song: {orig_name}")
-                    break
-                chunk = p.stdout.read(65536)
-                if not chunk:
-                    break
-                try:
-                    with open("audio_pipe.pcm", "ab") as pipe_f:
-                        pipe_f.write(chunk)
-                except Exception:
-                    break
-            p.wait()
-
 def copyright_watchdog():
     while True:
         time.sleep(15)
@@ -274,8 +193,11 @@ def copyright_watchdog():
                 if life in ["revoked", "complete"] or status.get("recordingStatus") == "notRecording":
                     log(f"Stream disruption detected during song: {current_playing_song}")
                     ban_song(current_playing_song)
+                    if current_proc:
+                        current_proc.terminate()
         except Exception:
             pass
+
 def fetch_multiple_images(folder="pics", count=12):
     os.makedirs(folder, exist_ok=True)
     for f in os.listdir(folder):
@@ -381,18 +303,14 @@ def time_watcher():
                 current_proc.terminate()
 
 def start_auto_cloud_live():
-    global current_proc, active_slot
+    global current_proc, active_slot, current_playing_song
     rtmp_url = f"{STREAM_URL}/{STREAM_KEY}"
     set_welcome_text("")
-    if os.path.exists("audio_pipe.pcm"):
-        os.remove("audio_pipe.pcm")
-    os.mkfifo("audio_pipe.pcm")
 
     threading.Thread(target=chat_listener, daemon=True).start()
     threading.Thread(target=time_watcher, daemon=True).start()
     threading.Thread(target=image_rotator_loop, daemon=True).start()
     threading.Thread(target=copyright_watchdog, daemon=True).start()
-    threading.Thread(target=audio_feeder_loop, daemon=True).start()
 
     f1 = "[0:v]scale=1280:720,format=yuv420p[bg];"
     f2 = f"[1:a]volume={MUSIC_VOLUME},asplit=2[aout][awaves];[awaves]showwaves=s=1280x50:mode=line:rate=24:colors=white@0.4[waves];[bg][waves]overlay=0:H-50[with_waves];"
@@ -410,23 +328,35 @@ def start_auto_cloud_live():
 
         threading.Thread(target=update_only_this_live_seo, args=(yt_title, yt_desc, "bg.jpg", tagline), daemon=True).start()
 
-        cmd = [
-            "ffmpeg", "-re",
-            "-f", "image2", "-loop", "1", "-r", "24", "-i", "live_bg.jpg",
-            "-f", "s16le", "-ar", "44100", "-ac", "2", "-i", "audio_pipe.pcm",
-            "-filter_complex", filter_complex,
-            "-map", "[vout]", "-map", "[aout]",
-            "-c:v", "libx264", "-preset", "ultrafast", "-b:v", "1800k",
-            "-maxrate", "1800k", "-bufsize", "3600k", "-pix_fmt", "yuv420p",
-            "-g", "48", "-c:a", "aac", "-b:a", "192k", "-ar", "44100",
-            "-f", "flv", rtmp_url
-        ]
-        try:
-            current_proc = subprocess.Popen(cmd)
-            current_proc.wait()
-        except Exception as e:
-            log(f"Stream reset: {e}")
-        time.sleep(3)
+        # एक-एक सुरक्षित गाना बजाना ताकि वीडियो 100% स्मूथ रहे और हर गाने पर निगरानी रहे
+        songs = sorted([f for f in os.listdir("songs") if f.endswith(".mp3")])
+        for s in songs:
+            if active_slot != slot:
+                break
+            orig_name = s.split("__", 1)[-1]
+            if orig_name in get_banned_songs():
+                continue
+            current_playing_song = orig_name
+            log(f"Now Playing: {orig_name}")
+            song_path = os.path.join("songs", s)
+
+            cmd = [
+                "ffmpeg", "-re",
+                "-f", "image2", "-loop", "1", "-r", "24", "-i", "live_bg.jpg",
+                "-i", song_path,
+                "-filter_complex", filter_complex,
+                "-map", "[vout]", "-map", "[aout]",
+                "-c:v", "libx264", "-preset", "ultrafast", "-b:v", "1800k",
+                "-maxrate", "1800k", "-bufsize", "3600k", "-pix_fmt", "yuv420p",
+                "-g", "48", "-c:a", "aac", "-b:a", "192k", "-ar", "44100",
+                "-shortest", "-f", "flv", rtmp_url
+            ]
+            try:
+                current_proc = subprocess.Popen(cmd)
+                current_proc.wait()
+            except Exception as e:
+                log(f"Stream reset: {e}")
+        time.sleep(2)
 
 if __name__ == "__main__":
     start_auto_cloud_live()
