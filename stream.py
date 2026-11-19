@@ -158,7 +158,23 @@ def update_only_this_live_seo(title, description, thumb_path="bg.jpg", tagline="
                     return
         except Exception as e:
             log(f"SEO Update Error: {e}")
-import shutil
+BANNED_FILE = "banned_songs.txt"
+current_playing_song = None
+
+def get_banned_songs():
+    if not os.path.exists(BANNED_FILE):
+        return set()
+    with open(BANNED_FILE, "r", encoding="utf-8") as f:
+        return set(line.strip() for line in f if line.strip())
+
+def ban_song(song_name):
+    if not song_name:
+        return
+    banned = get_banned_songs()
+    if song_name not in banned:
+        with open(BANNED_FILE, "a", encoding="utf-8") as f:
+            f.write(song_name + "\n")
+        log(f"COPYRIGHT GUARD: '{song_name}' ko hamesha ke liye block kar diya gaya hai!")
 
 def fetch_online_songs(query, slot_name="morning", folder="songs"):
     os.makedirs(folder, exist_ok=True)
@@ -166,7 +182,7 @@ def fetch_online_songs(query, slot_name="morning", folder="songs"):
         try: os.remove(os.path.join(folder, f))
         except: pass
 
-    # आपकी GitHub Release (v1.0) से सीधे आपके अपलोड किए हुए गाने डाउनलोड करना
+    banned = get_banned_songs()
     try:
         api_h = "api." + "github.com"
         rel_url = f"https://{api_h}/repos/joyaxgamer/auto-cloud-live/releases/tags/v1.0"
@@ -174,40 +190,91 @@ def fetch_online_songs(query, slot_name="morning", folder="songs"):
         data = json.loads(urllib.request.urlopen(req, timeout=15).read().decode())
         assets = data.get("assets", [])
 
-        # केवल मौजूदा स्लॉट (morning, afternoon, evening, night) के गाने ही चुनना
         matched = [
             a for a in assets
             if a.get("name", "").lower().endswith(".mp3")
             and a.get("name", "").lower().startswith(slot_name.lower())
+            and a.get("name") not in banned
         ]
-
-        # बैकअप: यदि किसी स्लॉट की फाइल न मिले तो Release के कोई भी mp3 उठा लेना
         if not matched:
-            matched = [a for a in assets if a.get("name", "").lower().endswith(".mp3")]
-
+            matched = [
+                a for a in assets
+                if a.get("name", "").lower().endswith(".mp3")
+                and a.get("name") not in banned
+            ]
         matched.sort(key=lambda x: x.get("name", ""))
 
         for idx, asset in enumerate(matched):
             dl_url = asset.get("browser_download_url")
             orig_name = asset.get("name")
-            save_path = os.path.join(folder, f"track_{idx}.mp3")
+            save_path = os.path.join(folder, f"{idx:02d}__{orig_name}")
             urllib.request.urlretrieve(dl_url, save_path)
-            log(f"Loaded From Release [{slot_name.upper()}] #{idx+1}: {orig_name}")
+            log(f"Loaded Safe Song [{slot_name.upper()}]: {orig_name}")
     except Exception as e:
         log(f"Release song load note: {e}")
 
-    # अंतिम सुरक्षा: यदि Release अभी न बनी हो तो मधुर हार्मोनिक कॉर्ड्स चलाना
     if len(os.listdir(folder)) == 0:
-        log("Waiting for v1.0 release songs, playing soft harmonic chords...")
         melody_filter = (
             "aevalsrc='0.15*sin(2*PI*261.63*t)+0.12*sin(2*PI*329.63*t)+0.12*sin(2*PI*392.00*t)'"
             ":s=44100:d=300,afade=t=in:st=0:d=4,afade=t=out:st=296:d=4"
         )
         subprocess.run([
             "ffmpeg", "-y", "-f", "lavfi", "-i", melody_filter,
-            "-b:a", "192k", os.path.join(folder, "melody.mp3")
+            "-b:a", "192k", os.path.join(folder, "00__melody.mp3")
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+def audio_feeder_loop():
+    global current_playing_song
+    while True:
+        songs = sorted([f for f in os.listdir("songs") if f.endswith(".mp3")])
+        if not songs:
+            time.sleep(2)
+            continue
+        for s in songs:
+            orig_name = s.split("__", 1)[-1]
+            if orig_name in get_banned_songs():
+                continue
+            current_playing_song = orig_name
+            log(f"Now Playing: {orig_name}")
+            song_path = os.path.join("songs", s)
+            p = subprocess.Popen(
+                ["ffmpeg", "-re", "-i", song_path, "-f", "s16le", "-ar", "44100", "-ac", "2", "pipe:1"],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
+            )
+            while True:
+                if orig_name in get_banned_songs():
+                    p.terminate()
+                    log(f"Skipped Banned Song: {orig_name}")
+                    break
+                chunk = p.stdout.read(65536)
+                if not chunk:
+                    break
+                try:
+                    with open("audio_pipe.pcm", "ab") as pipe_f:
+                        pipe_f.write(chunk)
+                except Exception:
+                    break
+            p.wait()
+
+def copyright_watchdog():
+    while True:
+        time.sleep(15)
+        if not target_broadcast_id or not current_playing_song:
+            continue
+        try:
+            yt = get_youtube_service()
+            if not yt:
+                continue
+            res = yt.liveBroadcasts().list(part="status", id=target_broadcast_id).execute()
+            items = res.get("items", [])
+            if items:
+                status = items.get("status", {})
+                life = status.get("lifeCycleStatus", "")
+                if life in ["revoked", "complete"] or status.get("recordingStatus") == "notRecording":
+                    log(f"Stream disruption detected during song: {current_playing_song}")
+                    ban_song(current_playing_song)
+        except Exception:
+            pass
 def fetch_multiple_images(folder="pics", count=12):
     os.makedirs(folder, exist_ok=True)
     for f in os.listdir(folder):
@@ -221,8 +288,7 @@ def fetch_multiple_images(folder="pics", count=12):
         req = urllib.request.Request(bing_api, headers={"User-Agent": "Mozilla/5.0"})
         data = json.loads(urllib.request.urlopen(req, timeout=15).read().decode())
         for item in data.get("images", []):
-            if downloaded >= count:
-                break
+            if downloaded >= count: break
             img_path = item.get("url", "")
             if img_path:
                 full_url = f"https://{b_host}{img_path}"
@@ -231,10 +297,9 @@ def fetch_multiple_images(folder="pics", count=12):
                 if os.path.exists(out_img) and os.path.getsize(out_img) > 15000:
                     with Image.open(out_img) as im:
                         im.convert("RGB").resize((1280, 720)).save(out_img, "JPEG", quality=92)
-                    log(f"Bing HD Nature Photo Saved: {downloaded+1}")
                     downloaded += 1
-    except Exception as e:
-        log(f"Bing photo note: {e}")
+    except Exception:
+        pass
 
     nature_seeds = {
         "morning": list((10, 11, 13, 14, 15, 16, 17, 28, 29)),
@@ -247,8 +312,7 @@ def fetch_multiple_images(folder="pics", count=12):
 
     pic_host = "picsum." + "photos"
     for s in seeds:
-        if downloaded >= count:
-            break
+        if downloaded >= count: break
         out_img = os.path.join(folder, f"pic_{downloaded}.jpg")
         try:
             url = f"https://{pic_host}/id/{s}/1280/720"
@@ -256,7 +320,6 @@ def fetch_multiple_images(folder="pics", count=12):
             with urllib.request.urlopen(req_img, timeout=15) as r, open(out_img, "wb") as out_f:
                 out_f.write(r.read())
             if os.path.exists(out_img) and os.path.getsize(out_img) > 15000:
-                log(f"Curated Nature Photo Saved: {downloaded+1} (ID {s})")
                 downloaded += 1
         except Exception:
             pass
@@ -264,13 +327,6 @@ def fetch_multiple_images(folder="pics", count=12):
     if os.path.exists(os.path.join(folder, "pic_0.jpg")):
         subprocess.run(["cp", os.path.join(folder, "pic_0.jpg"), "bg.jpg"])
         subprocess.run(["cp", os.path.join(folder, "pic_0.jpg"), "live_bg.jpg"])
-
-def build_song_playlist():
-    s_files = [os.path.abspath(os.path.join("songs", f)) for f in os.listdir("songs") if f.endswith(".mp3")]
-    with open("playlist.txt", "w", encoding="utf-8") as f:
-        for _ in range(50):
-            random.shuffle(s_files)
-            for p in s_files: f.write(f"file '{p}'\n")
 
 def image_rotator_loop():
     idx = 1
@@ -282,7 +338,6 @@ def image_rotator_loop():
             idx += 1
             subprocess.run(["cp", chosen, "temp_bg.jpg"])
             os.replace("temp_bg.jpg", "live_bg.jpg")
-            log(f"Background image rotated -> {chosen}")
 
 def set_welcome_text(msg):
     with open("welcome.txt", "w", encoding="utf-8") as f: f.write(msg)
@@ -328,9 +383,15 @@ def start_auto_cloud_live():
     global current_proc, active_slot
     rtmp_url = f"{STREAM_URL}/{STREAM_KEY}"
     set_welcome_text("")
+    if os.path.exists("audio_pipe.pcm"):
+        os.remove("audio_pipe.pcm")
+    os.mkfifo("audio_pipe.pcm")
+
     threading.Thread(target=chat_listener, daemon=True).start()
     threading.Thread(target=time_watcher, daemon=True).start()
     threading.Thread(target=image_rotator_loop, daemon=True).start()
+    threading.Thread(target=copyright_watchdog, daemon=True).start()
+    threading.Thread(target=audio_feeder_loop, daemon=True).start()
 
     f1 = "[0:v]scale=1280:720,format=yuv420p[bg];"
     f2 = f"[1:a]volume={MUSIC_VOLUME},asplit=2[aout][awaves];[awaves]showwaves=s=1280x50:mode=line:rate=24:colors=white@0.4[waves];[bg][waves]overlay=0:H-50[with_waves];"
@@ -342,17 +403,16 @@ def start_auto_cloud_live():
     while True:
         slot, song_q, tagline, yt_title, yt_desc = get_slot_config()
         active_slot = slot
-        log(f"Starting upgraded slot: {slot.upper()}")
+        log(f"Starting protected slot: {slot.upper()}")
         fetch_online_songs(song_q, slot)
         fetch_multiple_images("pics", 12)
-        build_song_playlist()
 
         threading.Thread(target=update_only_this_live_seo, args=(yt_title, yt_desc, "bg.jpg", tagline), daemon=True).start()
 
         cmd = [
             "ffmpeg", "-re",
             "-f", "image2", "-loop", "1", "-r", "24", "-i", "live_bg.jpg",
-            "-f", "concat", "-safe", "0", "-stream_loop", "-1", "-i", "playlist.txt",
+            "-f", "s16le", "-ar", "44100", "-ac", "2", "-i", "audio_pipe.pcm",
             "-filter_complex", filter_complex,
             "-map", "[vout]", "-map", "[aout]",
             "-c:v", "libx264", "-preset", "ultrafast", "-b:v", "1800k",
@@ -369,3 +429,5 @@ def start_auto_cloud_live():
 
 if __name__ == "__main__":
     start_auto_cloud_live()
+
+
